@@ -18,7 +18,7 @@ import Data.Aeson
 import Data.Monoid ((<>))
 import GHC.Exts (fromList)
 
-import Control.Lens (preview)
+import Control.Lens (preview, makeLenses)
 
 main :: IO ()
 main = do 
@@ -62,7 +62,7 @@ signWith jwsContent keyMat = do
                 Left (e :: Error) -> error $ show $ e
                 Right jwsSign -> jwsSign
   where
-    header = (newJWSHeader (Unprotected, ES256)) {
+    header = JWSHeaderExt $ (newJWSHeader (Unprotected, ES256)) {
       _jwsHeaderJwk = Just $ HeaderParam Unprotected jwkPublic }
       
     jwkPrivate :: JWK
@@ -76,3 +76,16 @@ very x y = do
   return $ case y of
             Left (e :: Error) -> error $ show $ e
             Right x' -> x'
+            
+data JWSHeaderExt = JWSHeaderExt { _basicHeader :: JWSHeader }
+  deriving (Show, Eq)
+makeLenses ''JWSHeaderExt
+  
+instance HasParams JWSHeaderExt where
+  params x = [(Protected, ("nonce", toJSON ("c3RbwD11NDfZpBoCkyPnFoQWeHrtNupY9_9N-LMUFeo" :: String)))] ++ (params $ _basicHeader x)
+  parseParamsFor = parseParamsFor
+
+instance HasJWSHeader JWSHeaderExt where
+  jWSHeader = basicHeader
+
+newJWSHeaderExt = JWSHeaderExt . newJWSHeader

@@ -24,7 +24,7 @@ executable acme
     DeriveGeneric,
     FlexibleContexts,
     FlexibleInstances,
-    OverloadedStrings
+    OverloadedStrings, TemplateHaskell
   -- other-modules:       
   -- other-extensions:    
   build-depends:
