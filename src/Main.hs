@@ -15,9 +15,10 @@ import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Yaml.Pretty
 
 import Data.Aeson
-import Data.Monoid
+import Data.Monoid ((<>))
 import GHC.Exts (fromList)
 
+import Control.Lens (preview)
 
 main :: IO ()
 main = do 
@@ -55,15 +56,19 @@ toObject a = case toJSON a of
 jsonNice = B.putStrLn . encodePretty defConfig
 
 signWith jwsContent keyMat = do
-      signed <- runExceptT $ signJWS jwsContent header jwk
+      signed <- runExceptT $ signJWS jwsContent header jwkPrivate
   
       return $ case signed of
                 Left (e :: Error) -> error $ show $ e
                 Right jwsSign -> jwsSign
   where
     header = (newJWSHeader (Unprotected, ES256)) {
-      _jwsHeaderJwk = Just $ HeaderParam Unprotected jwk }
-    jwk = fromKeyMaterial keyMat
+      _jwsHeaderJwk = Just $ HeaderParam Unprotected jwkPublic }
+      
+    jwkPrivate :: JWK
+    jwkPrivate = fromKeyMaterial keyMat
+    jwkPublic :: JWK
+    jwkPublic =  fromJust $ preview asPublicKey jwkPrivate
 
 very x y = do
   y <- runExceptT $ verifyJWS defaultValidationSettings x y
