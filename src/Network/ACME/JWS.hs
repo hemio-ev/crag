@@ -21,6 +21,7 @@ import Control.Lens (preview, makeLenses)
 import Data.Monoid ((<>))
 import GHC.Exts (fromList)
 import Data.Maybe (fromJust)
+import Control.Monad.Except
 
 import Data.Aeson
 
@@ -43,8 +44,8 @@ instance HasParams AcmeJwsHeader where
 instance HasJWSHeader AcmeJwsHeader where
   jWSHeader = jwsStandardHeader
 
-newAcmeJwsHeader ::
-  JWK -- | Key that will be used for signing. Okay to pass private key.
+newAcmeJwsHeader
+  :: JWK -- ^ Same key as used for signing. It's okay to include the private key.
   -> AcmeJwsHeader
 newAcmeJwsHeader jwk =
   AcmeJwsHeader
@@ -76,3 +77,13 @@ toJSONflat (JWS p [s]) = Object $ toObject s <> fromList ["payload" .= p]
         _ -> undefined
 toJSONflat (JWS _ _) = undefined
 
+signWith :: JWS AcmeJwsHeader -> KeyMaterial -> IO (JWS AcmeJwsHeader)
+signWith jwsContent keyMat = do
+  signed <- runExceptT $ signJWS jwsContent header' jwk
+  return $
+    case signed of
+      Left e -> error $ show (e :: Error)
+      Right jwsSign -> jwsSign
+  where
+    header' = newAcmeJwsHeader jwk
+    jwk = fromKeyMaterial keyMat
