@@ -2,27 +2,23 @@
 
 module Main where
 
-import Crypto.JOSE.JWS
-import Crypto.JOSE.Types
-import Crypto.JOSE.JWK
-import Crypto.JOSE.Error
 import Crypto.JOSE
 
-import Data.Maybe
 import Control.Monad.Except
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Yaml.Pretty
 
 import Data.Aeson
-import Data.Monoid ((<>))
-import GHC.Exts (fromList)
 
-import Control.Lens (preview, makeLenses)
+
+import Network.ACME.JWS
 
 main :: IO ()
-main = do 
-  let jwsContent = newJWS "{\
+main = do
+  let jwsContent =
+        newJWS
+          "{\
 \       \"agreement\": \"https://letsencrypt.org/documents/LE-SA-v1.0.1-July-27-2015.pdf\",\
 \       \"resource\": \"new-reg\",\
 \       \"contact\": [\
@@ -31,61 +27,28 @@ main = do
 \     }"
 
   key1 <- generateKey
-  key2 <- generateKey
-  
   jsonNice key1
-  
   signed <- signWith jwsContent key1
-  L.writeFile "post.json" (encode $ toFlatJSON signed)
 
+  L.writeFile "post.json" (encode $ toJSONflat signed)
   return ()
 
 generateKey :: IO KeyMaterial
 generateKey = genKeyMaterial (ECGenParam P_256)
 
-toFlatJSON (JWS p (s:[])) = Object $
-    toObject s <>
-    fromList ["payload" .= p]
-toFlatJSON (JWS _ _) = undefined
-
-toObject :: ToJSON a => a -> Object
-toObject a = case toJSON a of
-  Object o -> o
-  _        -> error "toObject: value isn't an Object"
-
+jsonNice :: ToJSON a => a -> IO ()
 jsonNice = B.putStrLn . encodePretty defConfig
 
+signWith :: 
+                  JWS AcmeJwsHeader -> KeyMaterial -> IO (JWS AcmeJwsHeader)
+
 signWith jwsContent keyMat = do
-      signed <- runExceptT $ signJWS jwsContent header jwkPrivate
-  
-      return $ case signed of
-                Left (e :: Error) -> error $ show $ e
-                Right jwsSign -> jwsSign
+  signed <- runExceptT $ signJWS jwsContent header' jwk
+  return $
+    case signed of
+      Left (e :: Error) -> error $ show e
+      Right jwsSign -> jwsSign
   where
-    header = JWSHeaderExt $ (newJWSHeader (Unprotected, ES256)) {
-      _jwsHeaderJwk = Just $ HeaderParam Unprotected jwkPublic }
-      
-    jwkPrivate :: JWK
-    jwkPrivate = fromKeyMaterial keyMat
-    jwkPublic :: JWK
-    jwkPublic =  fromJust $ preview asPublicKey jwkPrivate
+    header' = newAcmeJwsHeader jwk
+    jwk = fromKeyMaterial keyMat
 
-very x y = do
-  y <- runExceptT $ verifyJWS defaultValidationSettings x y
-  
-  return $ case y of
-            Left (e :: Error) -> error $ show $ e
-            Right x' -> x'
-            
-data JWSHeaderExt = JWSHeaderExt { _basicHeader :: JWSHeader }
-  deriving (Show, Eq)
-makeLenses ''JWSHeaderExt
-  
-instance HasParams JWSHeaderExt where
-  params x = [(Protected, ("nonce", toJSON ("c3RbwD11NDfZpBoCkyPnFoQWeHrtNupY9_9N-LMUFeo" :: String)))] ++ (params $ _basicHeader x)
-  parseParamsFor = parseParamsFor
-
-instance HasJWSHeader JWSHeaderExt where
-  jWSHeader = basicHeader
-
-newJWSHeaderExt = JWSHeaderExt . newJWSHeader
