@@ -25,12 +25,13 @@ executable acme
     FlexibleContexts,
     FlexibleInstances,
     OverloadedStrings,
-    TemplateHaskell
+    TemplateHaskell,
+    RecordWildCards
   -- other-modules:       
   -- other-extensions:    
   build-depends:
     base >=4.9 && <4.10,
-    jose, mtl, aeson, yaml, bytestring, lens, http-conduit, http-client
+    jose, mtl, aeson, yaml, bytestring, lens, http-conduit, http-client, filepath, network-uri, http-types, network
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options:
