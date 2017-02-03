@@ -44,11 +44,10 @@ instance FromJSON AcmeDirectoryMeta where
 class Show a =>
       AcmeRequest a  where
   acmeRequestUrl :: a -> URI
-  acmeRequestHttpMethod :: a -> StdMethod
   acmeRequestExpectedStatus :: a -> Status
 
 -- | Directory
-data AcmeRequestDirectory =
+newtype AcmeRequestDirectory =
   AcmeRequestDirectory URI
   deriving (Show, Eq, Generic)
 
@@ -56,11 +55,10 @@ instance FromJSON AcmeRequestDirectory
 
 instance AcmeRequest AcmeRequestDirectory where
   acmeRequestUrl (AcmeRequestDirectory u) = u
-  acmeRequestHttpMethod = const GET
   acmeRequestExpectedStatus = const ok200
 
 -- | New nonce
-data AcmeRequestNewNonce =
+newtype AcmeRequestNewNonce =
   AcmeRequestNewNonce URI
   deriving (Show, Eq, Generic)
 
@@ -68,11 +66,10 @@ instance FromJSON AcmeRequestNewNonce
 
 instance AcmeRequest AcmeRequestNewNonce where
   acmeRequestUrl (AcmeRequestNewNonce u) = u
-  acmeRequestHttpMethod = const HEAD
   acmeRequestExpectedStatus = const ok200
 
 -- | New registration
-data AcmeRequestNewReg =
+newtype AcmeRequestNewReg =
   AcmeRequestNewReg URI
   deriving (Show, Eq, Generic)
 
@@ -80,6 +77,18 @@ instance FromJSON AcmeRequestNewReg
 
 instance AcmeRequest AcmeRequestNewReg where
   acmeRequestUrl (AcmeRequestNewReg u) = u
-  acmeRequestHttpMethod = const POST
   acmeRequestExpectedStatus = const created201
+
+-- | Problem Details for HTTP APIs
+-- (<https://tools.ietf.org/html/rfc7807 RFC 7807>)
+data ProblemDetail = ProblemDetail {
+  problemDetailType :: Maybe URI,
+  problemDetailTitle :: Maybe String,
+  problemDetailStatus :: Maybe Int,
+  problemDetailDetail :: Maybe String,
+  problemDetailInstance :: Maybe URI
+} deriving (Show, Eq, Generic)
+
+instance FromJSON ProblemDetail where
+  parseJSON = parseAcmeServerResponse "problemDetail"
 
