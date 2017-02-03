@@ -3,9 +3,9 @@ module Network.ACME.Types where
 import Crypto.JOSE ()
 import Data.Aeson
 import GHC.Generics
-import Network.URI
 import Network.HTTP.Types
 import Network.Socket (HostName)
+import Network.URI
 
 import Network.ACME.Internal
 

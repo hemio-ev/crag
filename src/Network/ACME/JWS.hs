@@ -16,28 +16,31 @@ This module provides the necessary tweaks to the JOSE library.
 -}
 module Network.ACME.JWS where
 
-import Crypto.JOSE
-import Control.Lens (preview, makeLenses)
-import Data.Monoid ((<>))
-import GHC.Exts (fromList)
-import Data.Maybe (fromJust)
+import Control.Lens (preview, makeLenses, (&), (?~), at)
 import Control.Monad.Except
-
+import Crypto.JOSE
 import Data.Aeson
+import Data.Aeson.Lens
+import Data.Maybe (fromJust)
+import GHC.Generics
+
+newtype AcmeJwsNonce =
+  AcmeJwsNonce String
+  deriving (Show, Eq, Generic)
+
+instance ToJSON AcmeJwsNonce
 
 -- | Enhanced 'JWSHeader' with additional header parameters
-newtype AcmeJwsHeader = AcmeJwsHeader
+data AcmeJwsHeader = AcmeJwsHeader
   { _jwsStandardHeader :: JWSHeader
+  , _jwsAcmeHeaderNonce :: AcmeJwsNonce
   } deriving (Show, Eq)
 
 makeLenses ''AcmeJwsHeader
 
 instance HasParams AcmeJwsHeader where
   params x =
-    [ ( Protected
-      , ( "nonce"
-        , toJSON ("c3RbwD11NDfZpBoCkyPnFoQWeHrtNupY9_9N-LMUFe" :: String)))
-    ] ++
+    [(Protected, ("nonce", toJSON (_jwsAcmeHeaderNonce x)))] ++
     params (_jwsStandardHeader x)
   parseParamsFor = parseParamsFor
 
@@ -46,13 +49,18 @@ instance HasJWSHeader AcmeJwsHeader where
 
 newAcmeJwsHeader
   :: JWK -- ^ Same key as used for signing. It's okay to include the private key.
+  -> AcmeJwsNonce -- ^ Nonce
   -> AcmeJwsHeader
-newAcmeJwsHeader jwk =
+newAcmeJwsHeader jwk nonce =
   AcmeJwsHeader
-    ((newJWSHeader (Unprotected, alg))
-     { _jwsHeaderJwk = Just $ HeaderParam Unprotected jwkPublic
-     })
+  { _jwsStandardHeader = header'
+  , _jwsAcmeHeaderNonce = nonce
+  }
   where
+    header' =
+      (newJWSHeader (Unprotected, alg))
+      { _jwsHeaderJwk = Just $ HeaderParam Unprotected jwkPublic
+      }
     alg :: Alg
     alg =
       case bestJWSAlg jwk of
@@ -66,24 +74,19 @@ newAcmeJwsHeader jwk =
 toJSONflat
   :: HasParams t
   => JWS t -> Value
-toJSONflat (JWS p [s]) = Object $ toObject s <> fromList ["payload" .= p]
-  where
-    toObject
-      :: ToJSON a
-      => a -> Object
-    toObject a =
-      case toJSON a of
-        Object o -> o
-        _ -> undefined
+toJSONflat (JWS p [s]) = toJSON s & _Object . at "payload" ?~ toJSON p
 toJSONflat (JWS _ _) = undefined
 
-signWith :: JWS AcmeJwsHeader -> KeyMaterial -> IO (JWS AcmeJwsHeader)
-signWith jwsContent keyMat = do
+signWith :: JWS AcmeJwsHeader
+         -> KeyMaterial
+         -> AcmeJwsNonce
+         -> IO (JWS AcmeJwsHeader)
+signWith jwsContent keyMat nonce = do
   signed <- runExceptT $ signJWS jwsContent header' jwk
   return $
     case signed of
       Left e -> error $ show (e :: Error)
       Right jwsSign -> jwsSign
   where
-    header' = newAcmeJwsHeader jwk
+    header' = newAcmeJwsHeader jwk nonce
     jwk = fromKeyMaterial keyMat

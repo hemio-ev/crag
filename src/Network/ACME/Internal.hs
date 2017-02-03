@@ -2,11 +2,9 @@ module Network.ACME.Internal where
 
 import Data.Aeson
 import Data.Aeson.Types
-
-import GHC.Generics
-
 import Data.Char
 import Data.List
+import GHC.Generics
 
 parseAcmeServerResponse
   :: (Generic a, GFromJSON Zero (Rep a))

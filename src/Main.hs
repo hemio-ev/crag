@@ -1,17 +1,17 @@
 module Main where
 
 import Crypto.JOSE
-import qualified Data.ByteString.Char8 as B
-import qualified Data.ByteString.Lazy.Char8 as L
-import Data.Yaml.Pretty
-import Data.Maybe
 import Data.Aeson
 import Data.Aeson.Types
-import Network.HTTP.Simple
-import Network.HTTP.Client (method)
+import Data.Maybe
+import Data.Yaml.Pretty
 import GHC.Generics
-import Network.URI
+import Network.HTTP.Client (method)
+import Network.HTTP.Simple
 import Network.HTTP.Types
+import Network.URI
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy.Char8 as L
 
 import Network.ACME.JWS
 import Network.ACME.Types
@@ -23,13 +23,8 @@ confUrl =
 
 main :: IO ()
 main = do
-  putStrLn "welcome"
   di <- acmePerformDirectory (confUrl)
-  --putStrLn $ show di
-  acmePerformHeadNonce di >>= putStrLn
-
-main2 :: IO ()
-main2 = do
+  nonce <- acmePerformNonce di
   let jwsContent =
         newJWS
           "{\
@@ -41,7 +36,7 @@ main2 = do
 \     }"
   key1 <- generateKey
   jsonNice key1
-  signed <- signWith jwsContent key1
+  signed <- signWith jwsContent key1 nonce
   L.writeFile "post.json" (encode $ toJSONflat signed)
   return ()
 
@@ -105,13 +100,13 @@ acmePerformDirectory acmeReq = do
      { acmeDirectory = Just acmeReq
      })
 
-acmePerformHeadNonce
+acmePerformNonce
   :: AcmeDirectory -- ^ URL config
-  -> IO String -- ^ Nonce
-acmePerformHeadNonce d = do
+  -> IO AcmeJwsNonce -- ^ Nonce
+acmePerformNonce d = do
   res <- httpQuery httpNoBody req
   case getResponseHeader "Replay-Nonce" res of
-    nonce:_ -> return $ B.unpack nonce
+    nonce:_ -> return $ AcmeJwsNonce $ B.unpack nonce
     [] -> error $ show req ++ " does not result in a 'Replay-Nonce': " ++ show res
   where
     req = acmeGuessNewNonceRequest d
