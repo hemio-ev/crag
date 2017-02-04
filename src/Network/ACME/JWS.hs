@@ -79,16 +79,24 @@ toJSONflat
 toJSONflat (JWS p [s]) = toJSON s & _Object . at "payload" ?~ toJSON p
 toJSONflat (JWS _ _) = undefined
 
-jwsSigned :: (ToJSON a) => a -> URI -> KeyMaterial -> AcmeJwsNonce -> ExceptT Error IO (JWS AcmeJwsHeader)
-jwsSigned payload url =
-  signWith (newJWS $ toStrict $ encode payload')
- where
-  payload' = toJSON payload & _Object . at "resource" ?~ toJSON (last $ pathSegments url)
+jwsSigned
+  :: (ToJSON a)
+  => a
+  -> URI
+  -> KeyMaterial
+  -> AcmeJwsNonce
+  -> ExceptT Error IO (JWS AcmeJwsHeader)
+jwsSigned payload url = signWith (newJWS $ toStrict $ encode payload')
+  where
+    payload' =
+      toJSON payload & _Object . at "resource" ?~
+      toJSON (last $ pathSegments url)
 
-signWith :: JWS AcmeJwsHeader
-         -> KeyMaterial
-         -> AcmeJwsNonce
-         -> ExceptT Error IO (JWS AcmeJwsHeader)
+signWith
+  :: JWS AcmeJwsHeader
+  -> KeyMaterial
+  -> AcmeJwsNonce
+  -> ExceptT Error IO (JWS AcmeJwsHeader)
 signWith jwsContent keyMat nonce = signJWS jwsContent header' jwk
   where
     header' = newAcmeJwsHeader jwk nonce

@@ -33,17 +33,14 @@ main :: IO ()
 main = do
   acc <- loadAccount "acc.yml"
   putStrLn $ show acc
-
   let direct = acmePerformDirectory (confUrl)
   let obj = AcmeObjNewReg ["mailto:sophie_test_1@hemio.de"]
-
   regResult <- runExceptT $ (direct >>= acmePerformNewReg acc)
   putStrLn $ show regResult
-  
   return ()
 
-newJwsObj ::
-   (AcmeRequest a, ToJSON o)
+newJwsObj
+  :: (AcmeRequest a, ToJSON o)
   => a
   -> o
   -> AcmeAccount
@@ -51,7 +48,8 @@ newJwsObj ::
   -> ExceptT RequestError IO (JWS AcmeJwsHeader)
 newJwsObj req obj acc dir = do
   nonce <- acmePerformNonce dir
-  RequestJwsError `withExceptT` jwsSigned obj (acmeRequestUrl req) (acmeAccountKey acc) nonce
+  RequestJwsError `withExceptT`
+    jwsSigned obj (acmeRequestUrl req) (acmeAccountKey acc) nonce
 
 data AcmeServerResponse
   = AcmeServerError { detail :: String}
@@ -68,20 +66,20 @@ instance FromJSON AcmeServerResponse where
 ------------------
 -----------
 data AcmeAccount = AcmeAccount
-  { acmeAccountKey :: KeyMaterial,
-  acmeAccountContact :: [String]
+  { acmeAccountKey :: KeyMaterial
+  , acmeAccountContact :: [String]
   } deriving (Show, Eq, Generic)
 
 instance FromJSON AcmeAccount where
   parseJSON = parseAcmeServerResponse "acmeAccount"
+
 instance ToJSON AcmeAccount where
   toJSON = toAcmeConfigStore "acmeAccount"
-  
-  
-data AcmeObjNewReg = AcmeObjNewReg {
-  acmeObjNewRegContact :: [String]
+
+data AcmeObjNewReg = AcmeObjNewReg
+  { acmeObjNewRegContact :: [String]
   } deriving (Show, Eq, Generic)
-  
+
 instance ToJSON AcmeObjNewReg where
   toJSON = toAcmeRequestBody "acmeObjNewReg"
 
@@ -105,7 +103,8 @@ acmeHttpPost
   -> ExceptT RequestError IO c
 acmeHttpPost req bod = do
   parseJsonResult req =<<
-    httpLBS (setRequestBodyLBS (encode $ toJSONflat bod) $ newHttpRequest POST req)
+    httpLBS
+      (setRequestBodyLBS (encode $ toJSONflat bod) $ newHttpRequest POST req)
 
 acmeHttpGet
   :: (AcmeRequest a, FromJSON b)
@@ -133,8 +132,8 @@ acmeHttpHead
 acmeHttpHead req = do
   res <- httpNoBody (newHttpRequest HEAD req)
   if expectedResponseStatus res req
-      then return res
-      else throwE $ RequestErrorStatus (getResponseStatus res)
+    then return res
+    else throwE $ RequestErrorStatus (getResponseStatus res)
 
 expectedResponseStatus
   :: (AcmeRequest b)
@@ -156,14 +155,13 @@ acmePerformNonce
   -> ExceptT RequestError IO AcmeJwsNonce -- ^ Nonce
 acmePerformNonce d = do
   f <$> acmeHttpHead req
- where 
-  f res =
-        case getResponseHeader "Replay-Nonce" res of
-          nonce:_ -> AcmeJwsNonce $ B.unpack nonce
-          [] ->
-            error $ show req ++ " does not result in a 'Replay-Nonce': " ++ show res
-  
-  req = acmeGuessNewNonceRequest d
+  where
+    f res =
+      case getResponseHeader "Replay-Nonce" res of
+        nonce:_ -> AcmeJwsNonce $ B.unpack nonce
+        [] ->
+          error $ show req ++ " does not result in a 'Replay-Nonce': " ++ show res
+    req = acmeGuessNewNonceRequest d
 
 -- | Fallback to directory url, since Boulder does not implement /new-nonce/
 acmeGuessNewNonceRequest :: AcmeDirectory -> AcmeRequestNewNonce
@@ -182,10 +180,9 @@ acmePerformDirectory acmeReq = addDirectory <$> acmeHttpGet acmeReq
       }
 
 acmePerformNewReg :: AcmeAccount -> AcmeDirectory -> ExceptT RequestError IO AcmeAccount
-acmePerformNewReg acc dir =
-  newJwsObj req acc acc dir >>= acmeHttpPost req
- where
-  req = fromJust $ acmeDirectoryNewReg dir
+acmePerformNewReg acc dir = newJwsObj req acc acc dir >>= acmeHttpPost req
+  where
+    req = fromJust $ acmeDirectoryNewReg dir
 
 ------------------------ STUFF -------------------------
 ------------------------ STUFF -------------------------
