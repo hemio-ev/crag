@@ -23,6 +23,8 @@ import Data.Aeson
 import Data.Aeson.Lens
 import Data.Maybe (fromJust)
 import GHC.Generics
+import Network.URI (URI, pathSegments)
+import Data.ByteString.Lazy (toStrict)
 
 newtype AcmeJwsNonce =
   AcmeJwsNonce String
@@ -77,16 +79,17 @@ toJSONflat
 toJSONflat (JWS p [s]) = toJSON s & _Object . at "payload" ?~ toJSON p
 toJSONflat (JWS _ _) = undefined
 
+jwsSigned :: (ToJSON a) => a -> URI -> KeyMaterial -> AcmeJwsNonce -> ExceptT Error IO (JWS AcmeJwsHeader)
+jwsSigned payload url =
+  signWith (newJWS $ toStrict $ encode payload')
+ where
+  payload' = toJSON payload & _Object . at "resource" ?~ toJSON (last $ pathSegments url)
+
 signWith :: JWS AcmeJwsHeader
          -> KeyMaterial
          -> AcmeJwsNonce
-         -> IO (JWS AcmeJwsHeader)
-signWith jwsContent keyMat nonce = do
-  signed <- runExceptT $ signJWS jwsContent header' jwk
-  return $
-    case signed of
-      Left e -> error $ show (e :: Error)
-      Right jwsSign -> jwsSign
+         -> ExceptT Error IO (JWS AcmeJwsHeader)
+signWith jwsContent keyMat nonce = signJWS jwsContent header' jwk
   where
     header' = newAcmeJwsHeader jwk nonce
     jwk = fromKeyMaterial keyMat

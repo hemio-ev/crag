@@ -28,3 +28,11 @@ acmeJSONoptions pre =
         kebabKase x y
           | isAsciiLower x = x : y
           | otherwise = '-' : toLower x : y
+          
+toAcmeRequestBody :: (Generic a, GToJSON Zero (Rep a)) =>
+  String -> a -> Value
+toAcmeRequestBody pre = genericToJSON (acmeJSONoptions pre)
+
+toAcmeConfigStore :: (Generic a, GToJSON Zero (Rep a)) =>
+  String -> a -> Value
+toAcmeConfigStore = toAcmeRequestBody

@@ -12,6 +12,7 @@ import Network.HTTP.Types
 import Network.URI
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
+import Data.Yaml (decodeFileEither)
 
 import Network.ACME.JWS
 import Network.ACME.Types
@@ -23,26 +24,34 @@ confUrl :: AcmeRequestDirectory
 confUrl =
   (fromJust $ decode "\"https://acme-staging.api.letsencrypt.org/directory\"")
 
-eR (Right x) = x
+loadAccount :: FilePath -> IO AcmeAccount
+loadAccount x = do
+  Right d <- decodeFileEither x
+  return d
 
 main :: IO ()
 main = do
-  di <- acmePerformDirectory (confUrl)
-  nonce <- acmePerformNonce $ eR di
-  let jwsContent =
-        newJWS
-          "{\
-\       \"agreement\": \"https://letsencrypt.org/documents/LE-SA-v1.0.1-July-27-2015.pdf\",\
-\       \"resource\": \"https://acme-staging.api.letsencrypt.org/acme/new-reg\",\
-\       \"contact\": [\
-\         \"mailto:sophie_test_1@hemio.de\"\
-\       ]\
-\     }"
-  key1 <- generateKey
-  jsonNice key1
-  signed <- signWith jwsContent key1 nonce
-  L.writeFile "post.json" (encode $ toJSONflat signed)
+  acc <- loadAccount "acc.yml"
+  putStrLn $ show acc
+
+  let direct = acmePerformDirectory (confUrl)
+  let obj = AcmeObjNewReg ["mailto:sophie_test_1@hemio.de"]
+
+  regResult <- runExceptT $ (direct >>= acmePerformNewReg acc)
+  putStrLn $ show regResult
+  
   return ()
+
+newJwsObj ::
+   (AcmeRequest a, ToJSON o)
+  => a
+  -> o
+  -> AcmeAccount
+  -> AcmeDirectory
+  -> ExceptT RequestError IO (JWS AcmeJwsHeader)
+newJwsObj req obj acc dir = do
+  nonce <- acmePerformNonce dir
+  RequestJwsError `withExceptT` jwsSigned obj (acmeRequestUrl req) (acmeAccountKey acc) nonce
 
 data AcmeServerResponse
   = AcmeServerError { detail :: String}
@@ -59,85 +68,102 @@ instance FromJSON AcmeServerResponse where
 ------------------
 -----------
 data AcmeAccount = AcmeAccount
-  { acmeAccountKey :: KeyMaterial
-  }
+  { acmeAccountKey :: KeyMaterial,
+  acmeAccountContact :: [String]
+  } deriving (Show, Eq, Generic)
+
+instance FromJSON AcmeAccount where
+  parseJSON = parseAcmeServerResponse "acmeAccount"
+instance ToJSON AcmeAccount where
+  toJSON = toAcmeConfigStore "acmeAccount"
+  
+  
+data AcmeObjNewReg = AcmeObjNewReg {
+  acmeObjNewRegContact :: [String]
+  } deriving (Show, Eq, Generic)
+  
+instance ToJSON AcmeObjNewReg where
+  toJSON = toAcmeRequestBody "acmeObjNewReg"
 
 -------------------------------
-
 ----- ENGINE
-
-
-
 -- | Transforms abstract ACME to concrete HTTP request
 newHttpRequest
   :: (AcmeRequest a)
   => StdMethod
   -> a -- ^ ACME Request
   -> Request
-newHttpRequest meth acmeReq = setRequestMethod (renderStdMethod meth) $
-  (parseRequest_  url)
- where 
-  url =   show (acmeRequestUrl acmeReq)
-  
+newHttpRequest meth acmeReq =
+  setRequestMethod (renderStdMethod meth) $ (parseRequest_ url)
+  where
+    url = show (acmeRequestUrl acmeReq)
 
 acmeHttpPost
-  :: (AcmeRequest a, ToJSON b, FromJSON c)
+  :: (AcmeRequest a, FromJSON c)
   => a -- ^ Request
-  -> b
-  -> IO (Either (Status, Maybe ProblemDetail) c)
+  -> JWS AcmeJwsHeader
+  -> ExceptT RequestError IO c
 acmeHttpPost req bod = do
-  parseJsonResult req <$> httpLBS (setRequestBodyJSON bod $ newHttpRequest POST req)
+  parseJsonResult req =<<
+    httpLBS (setRequestBodyLBS (encode $ toJSONflat bod) $ newHttpRequest POST req)
 
 acmeHttpGet
   :: (AcmeRequest a, FromJSON b)
   => a -- ^ Request
-  -> IO (Either (Status, Maybe ProblemDetail) b)
-acmeHttpGet req = parseJsonResult req <$> httpLBS (newHttpRequest GET req)
-      
-parseJsonResult :: (AcmeRequest a, FromJSON b)
-  => a -> Response L.ByteString -> Either (Status, Maybe ProblemDetail) b
+  -> ExceptT RequestError IO b
+acmeHttpGet req = parseJsonResult req =<< httpLBS (newHttpRequest GET req)
+
+parseJsonResult
+  :: (AcmeRequest a, FromJSON b)
+  => a -> Response L.ByteString -> ExceptT RequestError IO b
 parseJsonResult req res
- | expectedResponseStatus res req = Right (fromJust $ decode $ getResponseBody res)
- | otherwise = Left (getResponseStatus res, fromJust $ decode $ getResponseBody res)
+  | expectedResponseStatus res req =
+    return $ (fromJust $ decode $ getResponseBody res)
+  | otherwise =
+    throwE $
+    RequestErrorDetail
+      (getResponseStatus res)
+      (fromJust $ decode $ getResponseBody res)
 
 -- | Perform HTTP query
 acmeHttpHead
   :: (AcmeRequest a)
   => a -- ^ Request
-  -> IO (Either Status (Response ()))
+  -> ExceptT RequestError IO (Response ())
 acmeHttpHead req = do
   res <- httpNoBody (newHttpRequest HEAD req)
-  return $
-    if expectedResponseStatus res req then
-      Right res
-    else
-      Left (getResponseStatus res)
+  if expectedResponseStatus res req
+      then return res
+      else throwE $ RequestErrorStatus (getResponseStatus res)
 
 expectedResponseStatus
   :: (AcmeRequest b)
   => Response a -> b -> Bool
-expectedResponseStatus r expected = getResponseStatus r == acmeRequestExpectedStatus expected
+expectedResponseStatus r expected =
+  getResponseStatus r == acmeRequestExpectedStatus expected
 
 -- requestBodyJSON :: a -> Request -> Request
-
-data RequestError = A | B deriving (Show)
-
-
+data RequestError
+  = RequestErrorDetail Status
+                       ProblemDetail
+  | RequestErrorStatus Status
+  | RequestJwsError Error
+  deriving (Show)
 
 ----- PERFORM
-
 acmePerformNonce
   :: AcmeDirectory -- ^ URL config
-  -> IO AcmeJwsNonce -- ^ Nonce
+  -> ExceptT RequestError IO AcmeJwsNonce -- ^ Nonce
 acmePerformNonce d = do
-  res' <- acmeHttpHead req
-  case res' of
-   (Right res) ->
-    case getResponseHeader "Replay-Nonce" res of
-      nonce:_ -> return $ AcmeJwsNonce $ B.unpack nonce
-      [] -> error $ show req ++ " does not result in a 'Replay-Nonce': " ++ show res
- where
-      req = acmeGuessNewNonceRequest d
+  f <$> acmeHttpHead req
+ where 
+  f res =
+        case getResponseHeader "Replay-Nonce" res of
+          nonce:_ -> AcmeJwsNonce $ B.unpack nonce
+          [] ->
+            error $ show req ++ " does not result in a 'Replay-Nonce': " ++ show res
+  
+  req = acmeGuessNewNonceRequest d
 
 -- | Fallback to directory url, since Boulder does not implement /new-nonce/
 acmeGuessNewNonceRequest :: AcmeDirectory -> AcmeRequestNewNonce
@@ -147,21 +173,25 @@ acmeGuessNewNonceRequest AcmeDirectory {..} =
     Nothing -> AcmeRequestNewNonce (acmeRequestUrl $ fromJust acmeDirectory)
 
 -- | Get all supported resources from server
-acmePerformDirectory :: AcmeRequestDirectory -> IO (Either (Status, Maybe ProblemDetail) AcmeDirectory)
-acmePerformDirectory acmeReq = do
-  res <- acmeHttpGet acmeReq
-  return $ (\x -> x { acmeDirectory = Just acmeReq }) <$> res
+acmePerformDirectory :: AcmeRequestDirectory -> ExceptT RequestError IO AcmeDirectory
+acmePerformDirectory acmeReq = addDirectory <$> acmeHttpGet acmeReq
+  where
+    addDirectory x =
+      x
+      { acmeDirectory = Just acmeReq
+      }
 
-
-
+acmePerformNewReg :: AcmeAccount -> AcmeDirectory -> ExceptT RequestError IO AcmeAccount
+acmePerformNewReg acc dir =
+  newJwsObj req acc acc dir >>= acmeHttpPost req
+ where
+  req = fromJust $ acmeDirectoryNewReg dir
 
 ------------------------ STUFF -------------------------
 ------------------------ STUFF -------------------------
 ------------------------ STUFF -------------------------
 ------------------------ STUFF -------------------------
 ------------------------ STUFF -------------------------
-
-
 generateKey :: IO KeyMaterial
 generateKey = genKeyMaterial (ECGenParam P_256)
 
@@ -170,5 +200,3 @@ jsonNice
   :: ToJSON a
   => a -> IO ()
 jsonNice = B.putStrLn . encodePretty defConfig
-
-
