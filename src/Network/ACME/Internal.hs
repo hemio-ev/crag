@@ -17,7 +17,7 @@ acmeJSONoptions pre =
   { fieldLabelModifier = f pre
   }
   where
-    f pr str = foldr kebabKase "" (startLower withoutPrefix)
+    f pr str = kebabKase False (startLower withoutPrefix) []
       where
         withoutPrefix =
           case stripPrefix pr str of
@@ -25,14 +25,20 @@ acmeJSONoptions pre =
             Nothing -> error $ "JSON key " ++ str ++ " has no prefix " ++ pr
         startLower (x:xs) = toLower x : xs
         startLower [] = ""
-        kebabKase x y
-          | isAsciiLower x = x : y
-          | otherwise = '-' : toLower x : y
-          
-toAcmeRequestBody :: (Generic a, GToJSON Zero (Rep a)) =>
-  String -> a -> Value
+        kebabKase :: Bool -> String -> String -> String
+        kebabKase _ [] ys = ys
+        kebabKase _ ('_':xs) ys = kebabKase True xs ys
+        kebabKase True (x:xs) ys = kebabKase False xs (ys ++ [toUpper x])
+        kebabKase False (x:xs) ys
+          | isAsciiLower x = kebabKase False xs (ys ++ [x])
+          | otherwise = kebabKase False xs (ys ++ ['-', toLower x])
+
+toAcmeRequestBody
+  :: (Generic a, GToJSON Zero (Rep a))
+  => String -> a -> Value
 toAcmeRequestBody pre = genericToJSON (acmeJSONoptions pre)
 
-toAcmeConfigStore :: (Generic a, GToJSON Zero (Rep a)) =>
-  String -> a -> Value
+toAcmeConfigStore
+  :: (Generic a, GToJSON Zero (Rep a))
+  => String -> a -> Value
 toAcmeConfigStore = toAcmeRequestBody

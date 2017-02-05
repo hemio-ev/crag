@@ -22,15 +22,10 @@ import Crypto.JOSE
 import Data.Aeson
 import Data.Aeson.Lens
 import Data.Maybe (fromJust)
-import GHC.Generics
 import Network.URI (URI, pathSegments)
 import Data.ByteString.Lazy (toStrict)
 
-newtype AcmeJwsNonce =
-  AcmeJwsNonce String
-  deriving (Show, Eq, Generic)
-
-instance ToJSON AcmeJwsNonce
+import Network.ACME.Types (AcmeJwsNonce)
 
 -- | Enhanced 'JWSHeader' with additional header parameters
 data AcmeJwsHeader = AcmeJwsHeader
