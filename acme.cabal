@@ -31,7 +31,7 @@ executable acme
   -- other-extensions:    
   build-depends:
     base >=4.9 && <4.10,
-    jose, mtl, aeson, yaml, bytestring, lens, http-conduit, http-client, filepath, network-uri, http-types, network, lens-aeson, transformers, time
+    jose, mtl, aeson, yaml, bytestring, lens, http-conduit, http-client, filepath, network-uri, http-types, network, lens-aeson, transformers, time, base64-bytestring
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options:

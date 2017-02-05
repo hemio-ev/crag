@@ -31,7 +31,7 @@ import Network.ACME.Types (AcmeJwsNonce)
 data AcmeJwsHeader = AcmeJwsHeader
   { _jwsStandardHeader :: JWSHeader
   , _jwsAcmeHeaderNonce :: AcmeJwsNonce
-  } deriving (Show, Eq)
+  } deriving (Show)
 
 makeLenses ''AcmeJwsHeader
 
@@ -85,7 +85,7 @@ jwsSigned payload url = signWith (newJWS $ toStrict $ encode payload')
   where
     payload' =
       toJSON payload & _Object . at "resource" ?~
-      toJSON (last $ pathSegments url)
+      toJSON ((pathSegments url) !! 1)
 
 signWith
   :: JWS AcmeJwsHeader
