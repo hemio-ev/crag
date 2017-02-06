@@ -17,13 +17,19 @@ This module provides the necessary tweaks to the JOSE library.
 module Network.ACME.JWS where
 
 import Control.Lens (preview, makeLenses, (&), (?~), at)
-import Control.Monad.Except
 import Crypto.JOSE
 import Data.Aeson
 import Data.Aeson.Lens
 import Data.Maybe (fromJust)
 import Network.URI (URI, pathSegments)
 import Data.ByteString.Lazy (toStrict)
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Base64.URL as Base64
+import Control.Lens.Operators ((^?!))
+import Crypto.Hash.SHA256 (hashlazy)
+import Data.Monoid ((<>))
+import Data.Aeson.Encoding
+import Control.Monad.Trans.Except
 
 import Network.ACME.Types (AcmeJwsNonce)
 
@@ -96,3 +102,14 @@ signWith jwsContent keyMat nonce = signJWS jwsContent header' jwk
   where
     header' = newAcmeJwsHeader jwk nonce
     jwk = fromKeyMaterial keyMat
+
+jwkThumbprint :: KeyMaterial -> String
+jwkThumbprint = hash . encodingToLazyByteString . pairs . toEnc
+  where
+    hash x = filter (/= '=') $ B.unpack $ Base64.encode (hashlazy x)
+    toEnc (ECKeyMaterial ECKeyParameters {..}) =
+      "crv" .= ecCrv <> "kty" .= ecKty <> "x" .= ecX <> "y" .= ecY
+    toEnc (RSAKeyMaterial keyParam) =
+      "e" .= (keyParam ^?! rsaE) <> "kty" .= (keyParam ^?! rsaKty) <> "n" .=
+      (keyParam ^?! rsaN)
+    toEnc (OctKeyMaterial OctKeyParameters {..}) = undefined

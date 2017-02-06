@@ -34,10 +34,10 @@ acmePerformNewAccount :: AcmeObjAccount
                       -> AcmeObjDirectory
                       -> ExceptT RequestError IO AcmeObjAccount
 acmePerformNewAccount acc dir = newJwsObj req acc acc dir >>= acmeHttpPostJSON req
--- TODO: Only supports bolder legacy
   where
     req = fromJust $ acmeObjDirectoryNewReg dir
 
+-- TODO: Only supports bolder legacy
 -- | Recover the account uri
 acmePerformAccountURI :: AcmeObjAccount
                       -> AcmeObjDirectory
@@ -48,12 +48,12 @@ acmePerformAccountURI acc dir = do
   return $
     AcmeRequestUpdateAccount $
     fromJust $ parseURI $ B.unpack $ head $ getResponseHeader "Location" res
--- TODO: Only supports bolder legacy
   where
     req =
       AcmeRequestAccountURI $
       acmeRequestUrl $ fromJust $ acmeObjDirectoryNewReg dir
 
+-- TODO: Only supports bolder legacy
 -- | Update account
 acmePerformUpdateAccount :: AcmeObjAccount
                          -> AcmeObjDirectory
@@ -62,6 +62,35 @@ acmePerformUpdateAccount acc dir = do
   req <- acmePerformAccountURI acc dir
   body <- newJwsObj req acc acc dir
   acmeHttpPostJSON req body
+
+-- | New authorization
+acmePerformNewAuthz
+  :: AcmeObjNewAuthz
+  -> AcmeObjAccount
+  -> AcmeObjDirectory
+  -> ExceptT RequestError IO AcmeObjAuthorization
+acmePerformNewAuthz authz acc dir =
+  case acmeObjDirectoryNewAuthz dir of
+    Nothing -> throwE (RequestNotSupported "new-authz")
+    Just req -> newJwsObj req authz acc dir >>= acmeHttpPostJSON req
+
+-- | New authorization
+acmePerformExistingAuthz
+  :: AcmeObjNewAuthz
+  -> AcmeObjAccount
+  -> AcmeObjDirectory
+  -> ExceptT RequestError IO AcmeObjAuthorization
+acmePerformExistingAuthz authz acc dir =
+  case acmeObjDirectoryNewAuthz dir of
+    Nothing -> throwE (RequestNotSupported "new-authz")
+    Just req -> newJwsObj (reqMod req) (authzMod) acc dir >>= acmeHttpPostJSON req
+  where
+    authzMod =
+      authz
+      { acmeObjNewAuthzExisting = Just "require"
+      }
+    reqMod :: AcmeRequestNewAuthz -> AcmeRequestExistingAuthz
+    reqMod = AcmeRequestExistingAuthz . acmeRequestUrl
 
 -- | Create new application (handing in a certificate request)
 acmePerformNewOrder
@@ -175,14 +204,15 @@ parseJsonResult
   => a -> Response L.ByteString -> ExceptT RequestError IO b
 parseJsonResult req res
   | isExpectedResponseStatus res req =
-    return $ (fromJust $ decode $ getResponseBody res)
+    case eitherDecode (getResponseBody res) of
+      Right x -> return x
+      Left msg -> throwE $ DecodingError msg $ L.unpack $ getResponseBody res
   | otherwise --error $ show $ res
    =
     throwE $
-    RequestErrorDetail
-      (show req)
-      (getResponseStatus res)
-      (fromJust $ decode $ getResponseBody res)
+    case eitherDecode (getResponseBody res) of
+      Right e -> RequestErrorDetail (show req) (getResponseStatus res) e
+      Left msg -> ErrorDecodingError msg $ L.unpack $ getResponseBody res
 
 isExpectedResponseStatus
   :: (AcmeRequest b)
@@ -194,6 +224,10 @@ data RequestError
   = RequestErrorDetail String
                        Status
                        ProblemDetail
+  | DecodingError String
+                  String
+  | ErrorDecodingError String
+                       String
   | RequestErrorStatus Status
   | RequestJwsError Error
   | RequestNotSupported String
@@ -205,6 +239,8 @@ showRequestError (RequestErrorDetail r s d) =
   r ++
   "\nStatus: " ++
   showStatus s ++ "\n\nDetails:\n" ++ B.unpack (encodePretty defConfig d)
+showRequestError (DecodingError msg original) =
+  "The stuff could not be decoded:\n" ++ msg ++ original
 showRequestError x = show x
 
 showStatus :: Status -> String

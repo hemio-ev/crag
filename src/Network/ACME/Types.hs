@@ -11,49 +11,7 @@ import Crypto.JOSE.Types (Base64Octets)
 
 import Network.ACME.Internal
 
--- * Abstractions
--- | ACME account
-data AcmeObjAccount = AcmeObjAccount
-  { acmeObjAccountKey :: KeyMaterial
-  , acmeObjAccountContact :: Maybe [String]
-  , acmeObjAccountStatus :: Maybe String
-  , acmeObjAccountTermsOfServiceAgreed :: Maybe Bool
-  , acmeObjAccountOrders :: Maybe URI
-  , acmeObjAccountAgreement :: Maybe URI -- ^ Boulder legacy
-  } deriving (Show, Generic)
-
-instance FromJSON AcmeObjAccount where
-  parseJSON = parseAcmeServerResponse "acmeObjAccount"
-
-instance ToJSON AcmeObjAccount where
-  toJSON = toAcmeConfigStore "acmeObjAccount"
-
--- ** Recover Account URI
-newtype AcmeRequestAccountURI =
-  AcmeRequestAccountURI URI
-  deriving (Show, Generic)
-
-instance AcmeRequest AcmeRequestAccountURI where
-  acmeRequestUrl (AcmeRequestAccountURI u) = u
-  acmeRequestExpectedStatus = const conflict409
-
--- ** Account Update
-newtype AcmeRequestUpdateAccount =
-  AcmeRequestUpdateAccount URI
-  deriving (Show, Generic)
-
-instance AcmeRequest AcmeRequestUpdateAccount where
-  acmeRequestUrl (AcmeRequestUpdateAccount u) = u
-  acmeRequestExpectedStatus = const accepted202
-
--- * Requests and Returned Objects
--- | Request class
-class Show a =>
-      AcmeRequest a  where
-  acmeRequestUrl :: a -> URI
-  acmeRequestExpectedStatus :: a -> Status
-
--- ** Directory
+-- * ACME Directory
 {-|
 In order to help clients configure themselves with the right URIs for
 each ACME operation, ACME servers provide a directory object.
@@ -63,7 +21,7 @@ data AcmeObjDirectory = AcmeObjDirectory
   , acmeObjDirectoryNewNonce :: Maybe AcmeRequestNewNonce
   , acmeObjDirectoryNewAccount :: Maybe AcmeRequestNewAccount
   , acmeObjDirectoryNewOrder :: Maybe AcmeRequestNewOrder
-  , acmeObjDirectoryNewAuthz :: Maybe URI -- ^ New authorization
+  , acmeObjDirectoryNewAuthz :: Maybe AcmeRequestNewAuthz
   , acmeObjDirectoryRevokeCert :: Maybe URI -- ^ Revoke certificate
   , acmeObjDirectoryKeyChange :: Maybe URI -- ^ Key change
   , acmeObjDirectoryMeta :: Maybe AcmeDirectoryMeta
@@ -97,7 +55,140 @@ instance AcmeRequest AcmeRequestDirectory where
   acmeRequestUrl (AcmeRequestDirectory u) = u
   acmeRequestExpectedStatus = const ok200
 
--- ** New Nonce
+-- * ACME Accounts
+
+-- | ACME account
+data AcmeObjAccount = AcmeObjAccount
+  { acmeObjAccountKey :: KeyMaterial
+  , acmeObjAccountContact :: Maybe [String]
+  , acmeObjAccountStatus :: Maybe String
+  , acmeObjAccountTermsOfServiceAgreed :: Maybe Bool
+  , acmeObjAccountOrders :: Maybe URI
+  , acmeObjAccountAgreement :: Maybe URI -- ^ Boulder legacy
+  } deriving (Show, Generic)
+
+instance FromJSON AcmeObjAccount where
+  parseJSON = parseAcmeServerResponse "acmeObjAccount"
+instance ToJSON AcmeObjAccount where
+  toJSON = toAcmeConfigStore "acmeObjAccount"
+
+-- ** New Account
+
+-- | New account
+newtype AcmeRequestNewAccount =
+  AcmeRequestNewAccount URI
+  deriving (Show, Generic)
+
+instance FromJSON AcmeRequestNewAccount
+
+instance AcmeRequest AcmeRequestNewAccount where
+  acmeRequestUrl (AcmeRequestNewAccount u) = u
+  acmeRequestExpectedStatus = const created201
+
+-- ** Recover Account URI
+newtype AcmeRequestAccountURI =
+  AcmeRequestAccountURI URI
+  deriving (Show, Generic)
+
+instance AcmeRequest AcmeRequestAccountURI where
+  acmeRequestUrl (AcmeRequestAccountURI u) = u
+  acmeRequestExpectedStatus = const conflict409
+
+-- ** Update Account
+newtype AcmeRequestUpdateAccount =
+  AcmeRequestUpdateAccount URI
+  deriving (Show, Generic)
+
+instance AcmeRequest AcmeRequestUpdateAccount where
+  acmeRequestUrl (AcmeRequestUpdateAccount u) = u
+  acmeRequestExpectedStatus = const accepted202
+
+-- * ACME Authorization
+
+-- | Authorization
+data AcmeObjAuthorization = AcmeObjAuthorization
+  { acmeObjAuthorizationIdentifier :: AcmeObjIdentifier
+  , acmeObjAuthorizationStatus :: String
+  , acmeObjAuthorizationExpires :: Maybe ZonedTime
+  , acmeObjAuthorizationScope :: Maybe URI
+  , acmeObjAuthorizationChallenges :: [AcmeObjChallenge]
+  } deriving (Show, Generic)
+
+instance FromJSON AcmeObjAuthorization where
+  parseJSON = parseAcmeServerResponse "acmeObjAuthorization"
+
+-- | Authorization identifier (usually Domain)
+data AcmeObjIdentifier = AcmeObjIdentifier
+  { acmeObjIdentifierType :: String
+  , acmeObjIdentifierValue :: String
+  } deriving (Show, Generic)
+
+instance FromJSON AcmeObjIdentifier where
+  parseJSON = parseAcmeServerResponse "acmeObjIdentifier"
+
+instance ToJSON AcmeObjIdentifier where
+  toJSON = toAcmeRequestBody "acmeObjIdentifier"
+
+-- ** New Authorizations
+-- | New authorization
+data AcmeObjNewAuthz = AcmeObjNewAuthz
+  { acmeObjNewAuthzIdentifier :: AcmeObjIdentifier
+  , acmeObjNewAuthzExisting :: Maybe String
+  } deriving (Show, Generic)
+
+instance ToJSON AcmeObjNewAuthz where
+  toJSON = toAcmeRequestBody "acmeObjNewAuthz"
+
+acmeNewDnsAuthz :: HostName -> AcmeObjNewAuthz
+acmeNewDnsAuthz domain =
+  AcmeObjNewAuthz
+  { acmeObjNewAuthzIdentifier =
+    AcmeObjIdentifier
+    { acmeObjIdentifierType = "dns"
+    , acmeObjIdentifierValue = domain
+    }
+  , acmeObjNewAuthzExisting = Nothing
+  }
+
+-- | Create new authorization if none exists
+newtype AcmeRequestNewAuthz =
+  AcmeRequestNewAuthz URI
+  deriving (Show, Generic)
+
+instance FromJSON AcmeRequestNewAuthz
+
+instance AcmeRequest AcmeRequestNewAuthz where
+  acmeRequestUrl (AcmeRequestNewAuthz u) = u
+  acmeRequestExpectedStatus = const created201
+
+-- Existing Authorizations
+
+-- | Get existing authorizations
+newtype AcmeRequestExistingAuthz =
+  AcmeRequestExistingAuthz URI
+  deriving (Show, Generic)
+
+instance AcmeRequest AcmeRequestExistingAuthz where
+  acmeRequestUrl (AcmeRequestExistingAuthz u) = u
+  acmeRequestExpectedStatus = const seeOther303
+
+-- * ACME Challenges
+data AcmeObjChallenge = AcmeObjChallenge
+  { acmeObjChallengeType :: String
+  , acmeObjChallengeUri :: URI -- ^ Boulder legacy, should be Url
+  , acmeObjChallengeStatus :: String
+  , acmeObjChallengeValidated :: Maybe ZonedTime
+  , acmeObjChallengeError :: Maybe ProblemDetail
+  , acmeObjChallengeToken :: Maybe String
+  } deriving (Show, Generic)
+
+instance FromJSON AcmeObjChallenge where
+  parseJSON = parseAcmeServerResponse "acmeObjChallenge"
+
+
+
+
+-- * ACME Nonce
 -- | Nonce
 newtype AcmeJwsNonce =
   AcmeJwsNonce String
@@ -115,17 +206,7 @@ instance AcmeRequest AcmeRequestNewNonce where
   acmeRequestUrl (AcmeRequestNewNonce u) = u
   acmeRequestExpectedStatus = const ok200
 
--- ** New Account
--- | New account
-newtype AcmeRequestNewAccount =
-  AcmeRequestNewAccount URI
-  deriving (Show, Generic)
-
-instance FromJSON AcmeRequestNewAccount
-
-instance AcmeRequest AcmeRequestNewAccount where
-  acmeRequestUrl (AcmeRequestNewAccount u) = u
-  acmeRequestExpectedStatus = const created201
+-- * ACME Application
 
 -- ** New Application
 -- | new-app
@@ -158,6 +239,12 @@ instance AcmeRequest AcmeRequestNewOrder where
   acmeRequestExpectedStatus = const created201
 
 -- * Misc
+-- | Request class
+class Show a =>
+      AcmeRequest a  where
+  acmeRequestUrl :: a -> URI
+  acmeRequestExpectedStatus :: a -> Status
+
 -- | Problem Details for HTTP APIs
 -- (<https://tools.ietf.org/html/rfc7807 RFC 7807>)
 data ProblemDetail = ProblemDetail
