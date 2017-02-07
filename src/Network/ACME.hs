@@ -2,6 +2,7 @@ module Network.ACME
   ( module Network.ACME
   , module Network.ACME.JWS
   , module Network.ACME.Types
+  , module Network.ACME.Errors
   ) where
 
 import Crypto.JOSE
@@ -15,16 +16,26 @@ import qualified Data.ByteString.Lazy.Char8 as L
 import Control.Monad.Trans.Except
 import Network.URI
 import Data.Yaml.Pretty
+import Data.Foldable
 
 import Network.ACME.JWS
 import Network.ACME.Types
+import Network.ACME.Errors
 
-handleError :: ExceptT RequestError IO a -> IO a
-handleError x = do
-  res <- runExceptT x
-  case res of
-    Left e -> error $ "fatal:\n" ++ showRequestError e
-    Right y -> return y
+
+acmeGetPendingChallenge :: 
+ String -- ^ Type
+ -> AcmeObjAuthorization
+ -> ExceptT RequestError IO AcmeObjChallenge 
+acmeGetPendingChallenge t = maybeToExceptT (AcmeErrNoChallenge t) . acmeMaybePendingChallenge t
+
+acmeMaybePendingChallenge :: 
+ String -- ^ Type
+ -> AcmeObjAuthorization
+ -> Maybe AcmeObjChallenge 
+acmeMaybePendingChallenge t authz =find cond (acmeObjAuthorizationChallenges authz)
+ where
+  cond x =  acmeObjChallengeStatus x == "pending" && acmeObjChallengeType x == t
 
 acmeKeyAuthorization :: AcmeObjChallenge
                      -> AcmeObjAccount
@@ -33,7 +44,6 @@ acmeKeyAuthorization ch acc =
   case acmeObjChallengeToken ch of
     Nothing -> throwE $ AcmeErrNoToken ch
     Just token -> return $ token ++ "." ++ jwkThumbprint (acmeObjAccountKey acc)
-
 
 newAcmeObjAccountStub :: String -> IO AcmeObjAccount
 newAcmeObjAccountStub mail = do
@@ -47,15 +57,6 @@ newAcmeObjAccountStub mail = do
     , acmeObjAccountOrders = Nothing
     , acmeObjAccountAgreement = Nothing
     }
-
-f :: String -> String -> ExceptT RequestError IO (Response L.ByteString)
-f hostName hash = do
-  x <- httpLBS req
-  return x 
- where 
-  req = setRequestBodyLBS body (parseRequest_ "POST http://172.17.0.1:8055/set-txt")  
-  body = encode $ object [ "host" .= hostName,
-      "value".= hash]
 
 -- * Perform Requests
 -- | Get all supported resources from server
@@ -274,34 +275,4 @@ isExpectedResponseStatus
 isExpectedResponseStatus r expected =
   getResponseStatus r == acmeRequestExpectedStatus expected
 
-data RequestError
-  = RequestErrorDetail String
-                       Status
-                       ProblemDetail
-                       (Maybe L.ByteString)
-  | DecodingError String
-                  String
-  | ErrorDecodingError Status
-                       String
-                       String
-  | RequestErrorStatus Status
-  | RequestJwsError Error
-  | RequestNotSupported String
-  | AcmeErrNoToken AcmeObjChallenge
-  deriving (Show)
 
-showRequestError :: RequestError -> String
-showRequestError (RequestErrorDetail r s d b) =
-  "Request: " ++
-  r ++
-  "\nStatus: " ++
-  showStatus s ++
-  "\n\nDetails:\n" ++
-  B.unpack (encodePretty defConfig d) ++
-  "\nRequest Body:\n" ++ L.unpack (fromMaybe "EMPTY" b)
-showRequestError (DecodingError msg original) =
-  "The stuff could not be decoded:\n" ++ msg ++ original
-showRequestError x = show x
-
-showStatus :: Status -> String
-showStatus Status {..} = show statusCode ++ " " ++ B.unpack statusMessage

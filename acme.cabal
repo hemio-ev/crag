@@ -29,6 +29,7 @@ library
     Network.ACME.Types
     Network.ACME.JWS
     Network.ACME.Internal
+    Network.ACME.Errors
   build-depends:
     base >=4.9 && <4.10,
     aeson,

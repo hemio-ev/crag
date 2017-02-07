@@ -1,49 +1,72 @@
 module T1 where
 
-import Crypto.JOSE
 import Data.Aeson
-import Data.Aeson.Types (emptyObject)
 import Data.Maybe
 import Network.HTTP.Simple
 import Network.HTTP.Types
-import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Control.Monad.Trans.Except
 import Network.URI
-import Data.Yaml.Pretty
-
+import Test.Tasty
+import Test.Tasty.HUnit
 import Network.ACME
 
-ff :: String -> String -> ExceptT RequestError IO (Response L.ByteString)
-ff hostName hash = do
-  x <- httpLBS req
-  return x 
- where 
-  req = setRequestBodyLBS body (parseRequest_ "POST http://172.17.0.1:8055/set-txt")  
-  body = encode $ object [ "host" .= hostName,
-      "value".= hash]
+confUrl :: AcmeRequestDirectory
+confUrl = fromJust $ decode "\"http://172.17.0.1:4000/directory\""
 
-xxx :: AcmeRequestDirectory -> IO AcmeObjChallenge
-xxx url = do
-  directory <- handleError $ acmePerformDirectory url
-  accStub <- (newAcmeObjAccountStub "sophie_test_2@hemio.de")
-  let acc =
-        accStub
-        { acmeObjAccountAgreement = parseURI "http://boulder:4000/terms/v1"
-        }
-  _ <- handleError $ acmePerformNewAccount acc directory
-  challenge <-
-    handleError $ acmePerformNewAuthz (acmeNewDnsAuthz "hemev-test-2.xyz") acc directory
-  --putStrLn $ groom challenge
-  let chal = (acmeObjAuthorizationChallenges challenge) !! 0
-  --putStrLn $ show chal
-  
-  x <-
-    handleError $
-    do hash <- acmeKeyAuthorization chal acc
-       o <- ff "_acme-challenge.hemev-test-2.xyz." (sha256 $ L.pack hash)
-       let chalResp = AcmeObjChallengeResponse hash
-       acmePerformRespondChallenge (acmeObjChallengeUri chal) chalResp acc directory
-  --putStrLn $ show x
-  return x
-  
+setDnsTxt :: String -> String -> IO (Response L.ByteString)
+setDnsTxt hostName hash =
+  do
+    res <- httpLBS req
+    getResponseStatus res @?= status200
+    return res
+  where
+    req =
+      setRequestBodyLBS
+        body
+        (parseRequest_ "POST http://172.17.0.1:8055/set-txt")
+    body = encode $ object ["host" .= ("_acme-challenge." ++ hostName ++ "."), "value" .= hash]
+
+
+completeUntiCert :: TestTree
+completeUntiCert =
+  testCaseSteps "Complete until certificate" $
+  \step -> do
+    let domain = "hemev-test-2.xyz" :: String
+    step "acmePerformDirectory"
+    directory <- assertExceptT $ acmePerformDirectory confUrl
+    accStub <- (newAcmeObjAccountStub "sophie_test_2@hemio.de")
+    let acc =
+          accStub
+          { acmeObjAccountAgreement = parseURI "http://boulder:4000/terms/v1"
+          }
+    step "acmePerformNewAccount"
+    _ <- assertExceptT $ acmePerformNewAccount acc directory
+    step "acmePerformNewAuthz"
+    authz <-
+      assertExceptT $ acmePerformNewAuthz (acmeNewDnsAuthz domain) acc directory
+    challenge <- assertExceptT $ acmeGetPendingChallenge "dns-01" authz
+    acmeObjChallengeType challenge @?= "dns-01"
+    hash <- assertExceptT $ acmeKeyAuthorization challenge acc
+    step "acmePerformRespondChallenge"
+    x <- assertExceptT $
+         let response = AcmeObjChallengeResponse hash
+             req = acmeObjChallengeUri challenge
+         in acmePerformRespondChallenge req response acc directory
+    isJust (acmeObjChallengeKey_Authorization x) @?
+      "keyAuthorization not accepted"
+    step "setDnsTxt"
+    _ <- setDnsTxt domain (sha256 hash)
+    step "Wait an check if challenge accepted"
+    -- TODO: implement
+    assertFailure "not implemented"
+
+assertExceptT :: ExceptT RequestError IO a -> IO a
+assertExceptT y =
+  runExceptT y >>=
+  \x ->
+     case x of
+       Right d -> return d
+       Left e -> do
+         assertFailure (showRequestError e)
+         undefined

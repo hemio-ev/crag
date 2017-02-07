@@ -26,11 +26,12 @@ import Data.ByteString.Lazy (toStrict)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Base64.URL as Base64
 import Control.Lens.Operators ((^?!))
-import Crypto.Hash.SHA256 (hashlazy)
+import Crypto.Hash.SHA256 (hash)
 import Data.Monoid ((<>))
 import Data.Aeson.Encoding
 import Control.Monad.Trans.Except
 import qualified Data.ByteString.Lazy.Char8 as L
+import Data.String
 
 import Network.ACME.Types (AcmeJwsNonce)
 
@@ -110,7 +111,7 @@ signWith jwsContent keyMat nonce = signJWS jwsContent header' jwk
 -- | JSON Web Key (JWK) Thumbprint
 -- <https://tools.ietf.org/html/rfc7638 RFC 7638>
 jwkThumbprint :: KeyMaterial -> String
-jwkThumbprint = sha256 . encodingToLazyByteString . pairs . toEnc
+jwkThumbprint = sha256 . L.unpack . encodingToLazyByteString . pairs . toEnc
   where
     toEnc (ECKeyMaterial ECKeyParameters {..}) =
       "crv" .= ecCrv <> "kty" .= ecKty <> "x" .= ecX <> "y" .= ecY
@@ -119,5 +120,5 @@ jwkThumbprint = sha256 . encodingToLazyByteString . pairs . toEnc
       (keyParam ^?! rsaN)
     toEnc (OctKeyMaterial OctKeyParameters {..}) = undefined
 
-sha256 :: L.ByteString -> String
-sha256 x = filter (/= '=') $ B.unpack $ Base64.encode (hashlazy x)
+sha256 :: String -> String
+sha256 x = filter (/= '=') $ B.unpack $ Base64.encode (hash $ B.pack x)
