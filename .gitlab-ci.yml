@@ -1,6 +1,7 @@
 build_job:
     script:
+        - cabal update
         - cabal sandbox init
         - cabal configure --enable-tests
-        - cabal build
+        - cabal install
 
