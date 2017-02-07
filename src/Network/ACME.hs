@@ -5,22 +5,21 @@ module Network.ACME
   , module Network.ACME.Errors
   ) where
 
+import Control.Monad.Trans.Except
 import Crypto.JOSE
 import Data.Aeson
 import Data.Aeson.Types (emptyObject)
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy.Char8 as L
+import Data.Foldable
 import Data.Maybe
 import Network.HTTP.Simple
 import Network.HTTP.Types
-import qualified Data.ByteString.Char8 as B
-import qualified Data.ByteString.Lazy.Char8 as L
-import Control.Monad.Trans.Except
 import Network.URI
-import Data.Yaml.Pretty
-import Data.Foldable
 
+import Network.ACME.Errors
 import Network.ACME.JWS
 import Network.ACME.Types
-import Network.ACME.Errors
 
 acmeGetPendingChallenge
   :: String -- ^ Type
@@ -62,27 +61,27 @@ newAcmeObjAccountStub mail = do
 
 -- * Perform Requests
 -- | Get all supported resources from server
-acmePerformDirectory :: AcmeRequestDirectory -> ExceptT RequestError IO AcmeObjDirectory
+acmePerformDirectory :: AcmeRequestDirectory
+                     -> ExceptT RequestError IO AcmeObjDirectory
 acmePerformDirectory acmeReq = addDirectory <$> acmeHttpGet acmeReq
   where
-    addDirectory x =
-      x
-      { acmeObjDirectory = Just acmeReq
-      }
+    addDirectory x = x {acmeObjDirectory = Just acmeReq}
 
 -- | Registeres new account
 acmePerformNewAccount :: AcmeObjAccount
                       -> AcmeObjDirectory
                       -> ExceptT RequestError IO AcmeObjAccount
-acmePerformNewAccount acc dir = newJwsObj req acc acc dir >>= acmeHttpPostJSON req
+acmePerformNewAccount acc dir =
+  newJwsObj req acc acc dir >>= acmeHttpPostJSON req
   where
     req = fromJust $ acmeObjDirectoryNewReg dir
 
 -- TODO: Only supports bolder legacy
 -- | Recover the account uri
-acmePerformAccountURI :: AcmeObjAccount
-                      -> AcmeObjDirectory
-                      -> ExceptT RequestError IO AcmeRequestUpdateAccount
+acmePerformAccountURI
+  :: AcmeObjAccount
+  -> AcmeObjDirectory
+  -> ExceptT RequestError IO AcmeRequestUpdateAccount
 acmePerformAccountURI acc dir = do
   body <- newJwsObj req emptyObject acc dir
   res <- acmeHttpPostResponse req body
@@ -124,12 +123,10 @@ acmePerformExistingAuthz
 acmePerformExistingAuthz authz acc dir =
   case acmeObjDirectoryNewAuthz dir of
     Nothing -> throwE (RequestNotSupported "new-authz")
-    Just req -> newJwsObj (reqMod req) (authzMod) acc dir >>= acmeHttpPostJSON req
+    Just req ->
+      newJwsObj (reqMod req) (authzMod) acc dir >>= acmeHttpPostJSON req
   where
-    authzMod =
-      authz
-      { acmeObjNewAuthzExisting = Just "require"
-      }
+    authzMod = authz {acmeObjNewAuthzExisting = Just "require"}
     reqMod :: AcmeRequestNewAuthz -> AcmeRequestExistingAuthz
     reqMod = AcmeRequestExistingAuthz . acmeRequestUrl
 
@@ -185,7 +182,8 @@ acmePerformNonce d = do
       case getResponseHeader "Replay-Nonce" res of
         nonce:_ -> AcmeJwsNonce $ B.unpack nonce
         [] ->
-          error $ show req ++ " does not result in a 'Replay-Nonce': " ++ show res
+          error $
+          show req ++ " does not result in a 'Replay-Nonce': " ++ show res
     req = guessNonceRequest d
     -- Fallback to directory url, since Boulder does not implement /new-nonce/
     guessNonceRequest :: AcmeObjDirectory -> AcmeRequestNewNonce

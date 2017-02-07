@@ -1,15 +1,15 @@
 module T1 where
 
+import Control.Monad.Trans.Except
 import Data.Aeson
+import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Maybe
+import Network.ACME
 import Network.HTTP.Simple
 import Network.HTTP.Types
-import qualified Data.ByteString.Lazy.Char8 as L
-import Control.Monad.Trans.Except
 import Network.URI
 import Test.Tasty
 import Test.Tasty.HUnit
-import Network.ACME
 
 confUrl :: AcmeRequestDirectory
 confUrl = fromJust $ decode "\"http://172.17.0.1:4000/directory\""
@@ -31,20 +31,19 @@ setDnsTxt hostName hash = do
 
 completeUntiCert :: TestTree
 completeUntiCert =
-  testCaseSteps "Complete until certificate" $
-  \step -> do
+  testCaseSteps "Complete until certificate" $ \step -> do
     let domain = "hemev-test-2.xyz" :: String
     step "acmePerformDirectory"
     directory <- assertExceptT $ acmePerformDirectory confUrl
     accStub <- (newAcmeObjAccountStub "sophie_test_2@hemio.de")
     let acc =
           accStub
-          { acmeObjAccountAgreement = parseURI "http://boulder:4000/terms/v1"
-          }
+          {acmeObjAccountAgreement = parseURI "http://boulder:4000/terms/v1"}
     step "acmePerformNewAccount"
     _ <- assertExceptT $ acmePerformNewAccount acc directory
     step "acmePerformNewAuthz"
-    authz <- assertExceptT $ acmePerformNewAuthz (acmeNewDnsAuthz domain) acc directory
+    authz <-
+      assertExceptT $ acmePerformNewAuthz (acmeNewDnsAuthz domain) acc directory
     challenge <- assertExceptT $ acmeGetPendingChallenge "dns-01" authz
     acmeObjChallengeType challenge @?= "dns-01"
     hash <- assertExceptT $ acmeKeyAuthorization challenge acc
@@ -64,10 +63,9 @@ completeUntiCert =
 
 assertExceptT :: ExceptT RequestError IO a -> IO a
 assertExceptT y =
-  runExceptT y >>=
-  \x ->
-     case x of
-       Right d -> return d
-       Left e -> do
-         assertFailure (showRequestError e)
-         undefined
+  runExceptT y >>= \x ->
+    case x of
+      Right d -> return d
+      Left e -> do
+        assertFailure (showRequestError e)
+        undefined

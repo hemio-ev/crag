@@ -1,7 +1,7 @@
 HS = $(shell find app/ src/ test/ -name '*.hs')
 
 
-.PHONY: $(HS)
+.PHONY: test $(HS)
 
 test:
 	cabal test --show-details=always --test-option=--color=always
@@ -9,4 +9,4 @@ test:
 format-code: $(HS)
 
 $(HS):
-	@~/.cabal/bin/hindent $@
+	@./.cabal-sandbox/bin/hindent $@

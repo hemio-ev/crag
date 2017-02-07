@@ -3,11 +3,11 @@
 module Main where
 
 import Data.Aeson
+import qualified Data.ByteString.Lazy.Char8 as L
+import Data.FileEmbed
 import Data.Maybe
 import Test.Tasty
 import Test.Tasty.HUnit
-import Data.FileEmbed
-import qualified Data.ByteString.Lazy.Char8 as L
 
 import Network.ACME
 import T1

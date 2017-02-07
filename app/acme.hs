@@ -1,15 +1,15 @@
 module Main where
 
+import Control.Monad.Trans.Except
 import Crypto.JOSE
 import Crypto.JOSE.Types
 import Data.Aeson
-import Data.Maybe
-import Data.Yaml.Pretty
+import qualified Data.ByteString.Base64.URL as Base64
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
-import qualified Data.ByteString.Base64.URL as Base64
+import Data.Maybe
 import Data.Yaml (decodeFileEither)
-import Control.Monad.Trans.Except
+import Data.Yaml.Pretty
 import Network.URI
 import Text.Groom
 
@@ -37,9 +37,7 @@ main = do
     handleError $
     (directory >>=
      acmePerformUpdateAccount
-       (acc
-        { acmeObjAccountAgreement = parseURI "http://boulder:4000/terms/v1"
-        }))
+       (acc {acmeObjAccountAgreement = parseURI "http://boulder:4000/terms/v1"}))
   --putStrLn $ groom updatedAccount
   challenge <-
     handleError $

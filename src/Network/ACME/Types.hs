@@ -1,13 +1,13 @@
 module Network.ACME.Types where
 
 import Crypto.JOSE (KeyMaterial)
+import Crypto.JOSE.Types (Base64Octets)
 import Data.Aeson
+import Data.Time
 import GHC.Generics
 import Network.HTTP.Types
 import Network.Socket (HostName)
 import Network.URI
-import Data.Time
-import Crypto.JOSE.Types (Base64Octets)
 
 import Network.ACME.Internal
 
@@ -141,10 +141,8 @@ acmeNewDnsAuthz :: HostName -> AcmeObjNewAuthz
 acmeNewDnsAuthz domain =
   AcmeObjNewAuthz
   { acmeObjNewAuthzIdentifier =
-    AcmeObjIdentifier
-    { acmeObjIdentifierType = "dns"
-    , acmeObjIdentifierValue = domain
-    }
+      AcmeObjIdentifier
+      {acmeObjIdentifierType = "dns", acmeObjIdentifierValue = domain}
   , acmeObjNewAuthzExisting = Nothing
   }
 
@@ -257,7 +255,7 @@ instance AcmeRequest AcmeRequestNewOrder where
 -- * Misc
 -- | Request class
 class Show a =>
-      AcmeRequest a  where
+      AcmeRequest a where
   acmeRequestUrl :: a -> URI
   acmeRequestExpectedStatus :: a -> Status
 

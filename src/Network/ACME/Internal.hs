@@ -12,10 +12,7 @@ parseAcmeServerResponse
 parseAcmeServerResponse pre = genericParseJSON (acmeJSONoptions pre)
 
 acmeJSONoptions :: String -> Options
-acmeJSONoptions pre =
-  defaultOptions
-  { fieldLabelModifier = f pre
-  }
+acmeJSONoptions pre = defaultOptions {fieldLabelModifier = f pre}
   where
     f pr str = kebabKase False (startLower withoutPrefix) []
       where

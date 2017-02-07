@@ -20,21 +20,20 @@ module Network.ACME.JWS
   ) where
 
 import Control.Lens (preview, makeLenses, (&), (?~), at)
+import Control.Lens.Operators ((^?!))
+import Control.Monad.Trans.Except
+import Crypto.Hash.SHA256 (hash)
 import Crypto.JOSE
 import Data.Aeson
-import Data.Aeson.Lens
-import Data.Maybe (fromJust)
-import Network.URI (URI, pathSegments)
-import Data.ByteString.Lazy (toStrict)
-import qualified Data.ByteString.Char8 as B
-import qualified Data.ByteString.Base64.URL as Base64
-import Control.Lens.Operators ((^?!))
-import Crypto.Hash.SHA256 (hash)
-import Data.Monoid ((<>))
 import Data.Aeson.Encoding
-import Control.Monad.Trans.Except
+import Data.Aeson.Lens
+import qualified Data.ByteString.Base64.URL as Base64
+import qualified Data.ByteString.Char8 as B
+import Data.ByteString.Lazy (toStrict)
 import qualified Data.ByteString.Lazy.Char8 as L
-import Data.String
+import Data.Maybe (fromJust)
+import Data.Monoid ((<>))
+import Network.URI (URI, pathSegments)
 
 import Network.ACME.Types (AcmeJwsNonce)
 
@@ -60,15 +59,11 @@ newAcmeJwsHeader
   -> AcmeJwsNonce -- ^ Nonce
   -> AcmeJwsHeader
 newAcmeJwsHeader jwk nonce =
-  AcmeJwsHeader
-  { _jwsStandardHeader = header'
-  , _jwsAcmeHeaderNonce = nonce
-  }
+  AcmeJwsHeader {_jwsStandardHeader = header', _jwsAcmeHeaderNonce = nonce}
   where
     header' =
       (newJWSHeader (Unprotected, alg))
-      { _jwsHeaderJwk = Just $ HeaderParam Unprotected jwkPublic
-      }
+      {_jwsHeaderJwk = Just $ HeaderParam Unprotected jwkPublic}
     alg :: Alg
     alg =
       case bestJWSAlg jwk of
