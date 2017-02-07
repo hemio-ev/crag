@@ -15,18 +15,19 @@ confUrl :: AcmeRequestDirectory
 confUrl = fromJust $ decode "\"http://172.17.0.1:4000/directory\""
 
 setDnsTxt :: String -> String -> IO (Response L.ByteString)
-setDnsTxt hostName hash =
-  do
-    res <- httpLBS req
-    getResponseStatus res @?= status200
-    return res
+setDnsTxt hostName hash = do
+  res <- httpLBS req
+  getResponseStatus res @?= status200
+  return res
   where
     req =
       setRequestBodyLBS
         body
         (parseRequest_ "POST http://172.17.0.1:8055/set-txt")
-    body = encode $ object ["host" .= ("_acme-challenge." ++ hostName ++ "."), "value" .= hash]
-
+    body =
+      encode $
+      object
+        ["host" .= ("_acme-challenge." ++ hostName ++ "."), "value" .= hash]
 
 completeUntiCert :: TestTree
 completeUntiCert =
@@ -43,16 +44,16 @@ completeUntiCert =
     step "acmePerformNewAccount"
     _ <- assertExceptT $ acmePerformNewAccount acc directory
     step "acmePerformNewAuthz"
-    authz <-
-      assertExceptT $ acmePerformNewAuthz (acmeNewDnsAuthz domain) acc directory
+    authz <- assertExceptT $ acmePerformNewAuthz (acmeNewDnsAuthz domain) acc directory
     challenge <- assertExceptT $ acmeGetPendingChallenge "dns-01" authz
     acmeObjChallengeType challenge @?= "dns-01"
     hash <- assertExceptT $ acmeKeyAuthorization challenge acc
     step "acmePerformRespondChallenge"
-    x <- assertExceptT $
-         let response = AcmeObjChallengeResponse hash
-             req = acmeObjChallengeUri challenge
-         in acmePerformRespondChallenge req response acc directory
+    x <-
+      assertExceptT $
+      let response = AcmeObjChallengeResponse hash
+          req = acmeObjChallengeUri challenge
+      in acmePerformRespondChallenge req response acc directory
     isJust (acmeObjChallengeKey_Authorization x) @?
       "keyAuthorization not accepted"
     step "setDnsTxt"

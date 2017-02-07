@@ -27,9 +27,6 @@ unitTests =
           jwk = fromJust (decode file) :: KeyMaterial
       in jwkThumbprint jwk @?= "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs"
     ]
-    
+
 integrationTests :: TestTree
-integrationTests =
-  testGroup "Network.ACME (Integration)" [
-  completeUntiCert
-  ]
+integrationTests = testGroup "Network.ACME (Integration)" [completeUntiCert]

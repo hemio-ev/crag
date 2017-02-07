@@ -26,13 +26,9 @@ loadAccount file = do
   case d of
     Right x -> return x
     Left e -> error $ groom e
+
 main :: IO ()
-main
---acc <- loadAccount "acc.yml"
---let jwk = fromKeyMaterial (acmeObjAccountKey acc)
----putStrLn $ toFp (acmeObjAccountKey acc)
---putStrLn $ jwkThumbprint (acmeObjAccountKey acc)
- = do
+main = do
   acc <- newAcmeObjAccountStub "sophie_test_2@hemio.de"
   --putStrLn $ groom acc
   let directory = acmePerformDirectory (confUrl)
@@ -59,10 +55,12 @@ main
   --putStrLn $ groom regResult
   return ()
 
-
+--acc <- loadAccount "acc.yml"
+--let jwk = fromKeyMaterial (acmeObjAccountKey acc)
+---putStrLn $ toFp (acmeObjAccountKey acc)
+--putStrLn $ jwkThumbprint (acmeObjAccountKey acc)
 -- | Prints object in a pretty YAML form
 jsonNice
   :: ToJSON a
   => a -> IO ()
 jsonNice = B.putStrLn . encodePretty defConfig
-

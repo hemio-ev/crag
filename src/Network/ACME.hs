@@ -22,20 +22,22 @@ import Network.ACME.JWS
 import Network.ACME.Types
 import Network.ACME.Errors
 
+acmeGetPendingChallenge
+  :: String -- ^ Type
+  -> AcmeObjAuthorization
+  -> ExceptT RequestError IO AcmeObjChallenge
+acmeGetPendingChallenge t =
+  maybeToExceptT (AcmeErrNoChallenge t) . acmeMaybePendingChallenge t
 
-acmeGetPendingChallenge :: 
- String -- ^ Type
- -> AcmeObjAuthorization
- -> ExceptT RequestError IO AcmeObjChallenge 
-acmeGetPendingChallenge t = maybeToExceptT (AcmeErrNoChallenge t) . acmeMaybePendingChallenge t
-
-acmeMaybePendingChallenge :: 
- String -- ^ Type
- -> AcmeObjAuthorization
- -> Maybe AcmeObjChallenge 
-acmeMaybePendingChallenge t authz =find cond (acmeObjAuthorizationChallenges authz)
- where
-  cond x =  acmeObjChallengeStatus x == "pending" && acmeObjChallengeType x == t
+acmeMaybePendingChallenge
+  :: String -- ^ Type
+  -> AcmeObjAuthorization
+  -> Maybe AcmeObjChallenge
+acmeMaybePendingChallenge t authz =
+  find cond (acmeObjAuthorizationChallenges authz)
+  where
+    cond x =
+      acmeObjChallengeStatus x == "pending" && acmeObjChallengeType x == t
 
 acmeKeyAuthorization :: AcmeObjChallenge
                      -> AcmeObjAccount
@@ -274,5 +276,3 @@ isExpectedResponseStatus
   => Response a -> b -> Bool
 isExpectedResponseStatus r expected =
   getResponseStatus r == acmeRequestExpectedStatus expected
-
-
