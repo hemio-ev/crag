@@ -14,7 +14,7 @@ This module provides the necessary tweaks to the JOSE library.
 * ACME uses an currently unregisterd header parameter "nonce".
   The 'AcmeJwsHeader' supports the required header parameters.
 -}
-module Network.ACME.JWS where
+module Network.ACME.JWS (module Network.ACME.JWS, KeyMaterial) where
 
 import Control.Lens (preview, makeLenses, (&), (?~), at)
 import Crypto.JOSE

@@ -19,6 +19,44 @@ import Data.Yaml.Pretty
 import Network.ACME.JWS
 import Network.ACME.Types
 
+handleError :: ExceptT RequestError IO a -> IO a
+handleError x = do
+  res <- runExceptT x
+  case res of
+    Left e -> error $ "fatal:\n" ++ showRequestError e
+    Right y -> return y
+
+acmeKeyAuthorization :: AcmeObjChallenge
+                     -> AcmeObjAccount
+                     -> ExceptT RequestError IO String
+acmeKeyAuthorization ch acc =
+  case acmeObjChallengeToken ch of
+    Nothing -> throwE $ AcmeErrNoToken ch
+    Just token -> return $ token ++ "." ++ jwkThumbprint (acmeObjAccountKey acc)
+
+
+newAcmeObjAccountStub :: String -> IO AcmeObjAccount
+newAcmeObjAccountStub mail = do
+  keyMat <- genKeyMaterial (RSAGenParam 256)
+  return $
+    AcmeObjAccount
+    { acmeObjAccountKey = keyMat
+    , acmeObjAccountContact = Just ["mailto:" ++ mail]
+    , acmeObjAccountStatus = Nothing
+    , acmeObjAccountTermsOfServiceAgreed = Nothing
+    , acmeObjAccountOrders = Nothing
+    , acmeObjAccountAgreement = Nothing
+    }
+
+f :: String -> String -> ExceptT RequestError IO (Response L.ByteString)
+f hostName hash = do
+  x <- httpLBS req
+  return x 
+ where 
+  req = setRequestBodyLBS body (parseRequest_ "POST http://172.17.0.1:8055/set-txt")  
+  body = encode $ object [ "host" .= hostName,
+      "value".= hash]
+
 -- * Perform Requests
 -- | Get all supported resources from server
 acmePerformDirectory :: AcmeRequestDirectory -> ExceptT RequestError IO AcmeObjDirectory

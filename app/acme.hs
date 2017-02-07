@@ -27,19 +27,8 @@ loadAccount file = do
     Right x -> return x
     Left e -> error $ groom e
 
-loadJwk :: IO KeyMaterial
-loadJwk = do
-  f <- decodeFileEither "rfc7638.jwk"
-  case f of
-    Left e -> error $ groom e
-    Right x -> return x
-
 main :: IO ()
 main = do
-  jwk <- loadJwk
-  if jwkThumbprint jwk == "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs"
-    then putStrLn "Test passed."
-    else error "Unit test failed."
   directory <- handleError $ acmePerformDirectory confUrl
   accStub <- (newAcmeObjAccountStub "sophie_test_2@hemio.de")
   let acc =
@@ -52,9 +41,11 @@ main = do
   --putStrLn $ groom challenge
   let chal = (acmeObjAuthorizationChallenges challenge) !! 0
   putStrLn $ groom chal
+  
   x <-
     handleError $
     do hash <- acmeKeyAuthorization chal acc
+       o <- f "_acme-challenge.hemev-test-2.xyz." (sha256 $ L.pack hash)
        let chalResp = AcmeObjChallengeResponse hash
        acmePerformRespondChallenge (acmeObjChallengeUri chal) chalResp acc directory
   putStrLn $ groom x
@@ -93,20 +84,6 @@ main2
   --putStrLn $ groom regResult
   return ()
 
-handleError :: ExceptT RequestError IO a -> IO a
-handleError x = do
-  res <- runExceptT x
-  case res of
-    Left e -> error $ "fatal:\n" ++ showRequestError e
-    Right y -> return y
-
-acmeKeyAuthorization :: AcmeObjChallenge
-                     -> AcmeObjAccount
-                     -> ExceptT RequestError IO String
-acmeKeyAuthorization ch acc =
-  case acmeObjChallengeToken ch of
-    Nothing -> throwE $ AcmeErrNoToken ch
-    Just token -> return $ token ++ "." ++ jwkThumbprint (acmeObjAccountKey acc)
 
 -- | Prints object in a pretty YAML form
 jsonNice
@@ -114,15 +91,3 @@ jsonNice
   => a -> IO ()
 jsonNice = B.putStrLn . encodePretty defConfig
 
-newAcmeObjAccountStub :: String -> IO AcmeObjAccount
-newAcmeObjAccountStub mail = do
-  keyMat <- genKeyMaterial (RSAGenParam 256)
-  return $
-    AcmeObjAccount
-    { acmeObjAccountKey = keyMat
-    , acmeObjAccountContact = Just ["mailto:" ++ mail]
-    , acmeObjAccountStatus = Nothing
-    , acmeObjAccountTermsOfServiceAgreed = Nothing
-    , acmeObjAccountOrders = Nothing
-    , acmeObjAccountAgreement = Nothing
-    }
