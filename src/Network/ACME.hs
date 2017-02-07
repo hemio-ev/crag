@@ -74,7 +74,7 @@ acmePerformNewAuthz authz acc dir =
     Nothing -> throwE (RequestNotSupported "new-authz")
     Just req -> newJwsObj req authz acc dir >>= acmeHttpPostJSON req
 
--- | New authorization
+-- | Existing authorization
 acmePerformExistingAuthz
   :: AcmeObjNewAuthz
   -> AcmeObjAccount
@@ -91,6 +91,16 @@ acmePerformExistingAuthz authz acc dir =
       }
     reqMod :: AcmeRequestNewAuthz -> AcmeRequestExistingAuthz
     reqMod = AcmeRequestExistingAuthz . acmeRequestUrl
+
+-- | Respond to challenge
+acmePerformRespondChallenge
+  :: AcmeRequestChallengeResponse
+  -> AcmeObjChallengeResponse
+  -> AcmeObjAccount
+  -> AcmeObjDirectory
+  -> ExceptT RequestError IO AcmeObjChallenge
+acmePerformRespondChallenge req ch acc dir =
+  newJwsObj req ch acc dir >>= acmeHttpPostJSON req
 
 -- | Create new application (handing in a certificate request)
 acmePerformNewOrder
@@ -151,9 +161,10 @@ acmeHttpPostJSON
   -> JWS AcmeJwsHeader
   -> ExceptT RequestError IO c
 acmeHttpPostJSON req bod = do
-  parseJsonResult req =<<
-    httpLBS
-      (setRequestBodyLBS (encode $ toJSONflat bod) $ newHttpRequest POST req)
+  parseJsonResult req (Just bod') =<<
+    httpLBS (setRequestBodyLBS bod' $ newHttpRequest POST req)
+  where
+    bod' = encode $ toJSONflat bod
 
 -- | Perform POST query
 acmeHttpPostResponse
@@ -174,7 +185,8 @@ acmeHttpGet
   :: (AcmeRequest a, FromJSON b)
   => a -- ^ Request
   -> ExceptT RequestError IO b
-acmeHttpGet req = parseJsonResult req =<< httpLBS (newHttpRequest GET req)
+acmeHttpGet req =
+  parseJsonResult req Nothing =<< httpLBS (newHttpRequest GET req)
 
 -- | Perform HEAD query
 acmeHttpHead
@@ -201,18 +213,22 @@ newHttpRequest meth acmeReq =
 -- ** HTTP-API Error Handling
 parseJsonResult
   :: (AcmeRequest a, FromJSON b)
-  => a -> Response L.ByteString -> ExceptT RequestError IO b
-parseJsonResult req res
+  => a
+  -> Maybe L.ByteString
+  -> Response L.ByteString
+  -> ExceptT RequestError IO b
+parseJsonResult req bod res
   | isExpectedResponseStatus res req =
     case eitherDecode (getResponseBody res) of
       Right x -> return x
       Left msg -> throwE $ DecodingError msg $ L.unpack $ getResponseBody res
-  | otherwise --error $ show $ res
-   =
+  | otherwise =
     throwE $
     case eitherDecode (getResponseBody res) of
-      Right e -> RequestErrorDetail (show req) (getResponseStatus res) e
-      Left msg -> ErrorDecodingError msg $ L.unpack $ getResponseBody res
+      Right e -> RequestErrorDetail (show req) (getResponseStatus res) e bod
+      Left msg ->
+        ErrorDecodingError (getResponseStatus res) msg $
+        L.unpack $ getResponseBody res
 
 isExpectedResponseStatus
   :: (AcmeRequest b)
@@ -224,21 +240,27 @@ data RequestError
   = RequestErrorDetail String
                        Status
                        ProblemDetail
+                       (Maybe L.ByteString)
   | DecodingError String
                   String
-  | ErrorDecodingError String
+  | ErrorDecodingError Status
+                       String
                        String
   | RequestErrorStatus Status
   | RequestJwsError Error
   | RequestNotSupported String
+  | AcmeErrNoToken AcmeObjChallenge
   deriving (Show)
 
 showRequestError :: RequestError -> String
-showRequestError (RequestErrorDetail r s d) =
+showRequestError (RequestErrorDetail r s d b) =
   "Request: " ++
   r ++
   "\nStatus: " ++
-  showStatus s ++ "\n\nDetails:\n" ++ B.unpack (encodePretty defConfig d)
+  showStatus s ++
+  "\n\nDetails:\n" ++
+  B.unpack (encodePretty defConfig d) ++
+  "\nRequest Body:\n" ++ L.unpack (fromMaybe "EMPTY" b)
 showRequestError (DecodingError msg original) =
   "The stuff could not be decoded:\n" ++ msg ++ original
 showRequestError x = show x

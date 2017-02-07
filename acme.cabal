@@ -23,9 +23,9 @@ executable acme
     FlexibleContexts,
     OverloadedStrings,
     RecordWildCards,
-    TemplateHaskell
+    TemplateHaskell,
 --    DeriveAnyClass,
---    DeriveDataTypeable,
+    DeriveDataTypeable
 --    FlexibleInstances,
   -- other-modules:       
   -- other-extensions:    
@@ -36,6 +36,7 @@ executable acme
     bytestring,
     cryptohash,
     filepath,
+    groom,
     http-client,
     http-conduit,
     http-types,

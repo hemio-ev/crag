@@ -30,6 +30,7 @@ import Crypto.Hash.SHA256 (hashlazy)
 import Data.Monoid ((<>))
 import Data.Aeson.Encoding
 import Control.Monad.Trans.Except
+import qualified Data.ByteString.Lazy.Char8 as L
 
 import Network.ACME.Types (AcmeJwsNonce)
 
@@ -68,6 +69,9 @@ newAcmeJwsHeader jwk nonce =
     alg =
       case bestJWSAlg jwk of
         Left e -> error (show (e :: Error))
+        -- Boulder sais
+        -- 'detail: signature type 'PS512' in JWS header is not supported'
+        Right PS512 -> RS256
         Right x -> x
     -- Removes private key
     jwkPublic :: JWK
@@ -103,13 +107,17 @@ signWith jwsContent keyMat nonce = signJWS jwsContent header' jwk
     header' = newAcmeJwsHeader jwk nonce
     jwk = fromKeyMaterial keyMat
 
+-- | JSON Web Key (JWK) Thumbprint
+-- <https://tools.ietf.org/html/rfc7638 RFC 7638>
 jwkThumbprint :: KeyMaterial -> String
-jwkThumbprint = hash . encodingToLazyByteString . pairs . toEnc
+jwkThumbprint = sha256 . encodingToLazyByteString . pairs . toEnc
   where
-    hash x = filter (/= '=') $ B.unpack $ Base64.encode (hashlazy x)
     toEnc (ECKeyMaterial ECKeyParameters {..}) =
       "crv" .= ecCrv <> "kty" .= ecKty <> "x" .= ecX <> "y" .= ecY
     toEnc (RSAKeyMaterial keyParam) =
       "e" .= (keyParam ^?! rsaE) <> "kty" .= (keyParam ^?! rsaKty) <> "n" .=
       (keyParam ^?! rsaN)
     toEnc (OctKeyMaterial OctKeyParameters {..}) = undefined
+
+sha256 :: L.ByteString -> String
+sha256 x = filter (/= '=') $ B.unpack $ Base64.encode (hashlazy x)

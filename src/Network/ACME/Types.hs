@@ -56,7 +56,6 @@ instance AcmeRequest AcmeRequestDirectory where
   acmeRequestExpectedStatus = const ok200
 
 -- * ACME Accounts
-
 -- | ACME account
 data AcmeObjAccount = AcmeObjAccount
   { acmeObjAccountKey :: KeyMaterial
@@ -69,11 +68,11 @@ data AcmeObjAccount = AcmeObjAccount
 
 instance FromJSON AcmeObjAccount where
   parseJSON = parseAcmeServerResponse "acmeObjAccount"
+
 instance ToJSON AcmeObjAccount where
   toJSON = toAcmeConfigStore "acmeObjAccount"
 
 -- ** New Account
-
 -- | New account
 newtype AcmeRequestNewAccount =
   AcmeRequestNewAccount URI
@@ -104,7 +103,6 @@ instance AcmeRequest AcmeRequestUpdateAccount where
   acmeRequestExpectedStatus = const accepted202
 
 -- * ACME Authorization
-
 -- | Authorization
 data AcmeObjAuthorization = AcmeObjAuthorization
   { acmeObjAuthorizationIdentifier :: AcmeObjIdentifier
@@ -162,7 +160,6 @@ instance AcmeRequest AcmeRequestNewAuthz where
   acmeRequestExpectedStatus = const created201
 
 -- Existing Authorizations
-
 -- | Get existing authorizations
 newtype AcmeRequestExistingAuthz =
   AcmeRequestExistingAuthz URI
@@ -175,18 +172,38 @@ instance AcmeRequest AcmeRequestExistingAuthz where
 -- * ACME Challenges
 data AcmeObjChallenge = AcmeObjChallenge
   { acmeObjChallengeType :: String
-  , acmeObjChallengeUri :: URI -- ^ Boulder legacy, should be Url
+  , acmeObjChallengeUri :: AcmeRequestChallengeResponse -- ^ Boulder legacy, should be Url
   , acmeObjChallengeStatus :: String
   , acmeObjChallengeValidated :: Maybe ZonedTime
   , acmeObjChallengeError :: Maybe ProblemDetail
   , acmeObjChallengeToken :: Maybe String
+  , acmeObjChallengeKey_Authorization :: Maybe String
   } deriving (Show, Generic)
 
+--instance ToJSON AcmeObjChallenge
 instance FromJSON AcmeObjChallenge where
   parseJSON = parseAcmeServerResponse "acmeObjChallenge"
 
+data AcmeObjChallengeResponse = AcmeObjChallengeResponse
+  { acmeObjChallengeResponseKey_Authorization :: String
+  } deriving (Show, Generic)
 
+instance ToJSON AcmeObjChallengeResponse where
+  toJSON = toAcmeRequestBody "acmeObjChallengeResponse"
 
+-- | Respond to a challenge
+newtype AcmeRequestChallengeResponse =
+  AcmeRequestChallengeResponse URI
+  deriving (Show, Generic)
+
+instance ToJSON AcmeRequestChallengeResponse
+
+instance FromJSON AcmeRequestChallengeResponse
+
+instance AcmeRequest AcmeRequestChallengeResponse where
+  acmeRequestUrl (AcmeRequestChallengeResponse u) = u
+  -- Boulder legacy: should be 200
+  acmeRequestExpectedStatus = const status202
 
 -- * ACME Nonce
 -- | Nonce
@@ -207,7 +224,6 @@ instance AcmeRequest AcmeRequestNewNonce where
   acmeRequestExpectedStatus = const ok200
 
 -- * ACME Application
-
 -- ** New Application
 -- | new-app
 data AcmeObjOrder = AcmeObjOrder
