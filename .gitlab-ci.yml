@@ -1,0 +1,6 @@
+build_job:
+    script:
+        - cabal sandbox init
+        - cabal configure --enable-tests
+        - cabal build
+
