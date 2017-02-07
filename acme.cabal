@@ -31,7 +31,7 @@ library
     Network.ACME.Internal
     Network.ACME.Errors
   build-depends:
-    base >=4.9 && <4.10,
+    base >=4.8 && <4.10,
     aeson,
     async,
     base64-bytestring,
@@ -72,7 +72,7 @@ executable acme
   
   build-depends:
     acme,
-    base >=4.9 && <4.10,
+    base >=4.8 && <4.10,
     aeson,
     async,
     base64-bytestring,
@@ -101,43 +101,30 @@ executable acme
 test-suite acme-test
   default-extensions:
     DeriveGeneric,
-    FlexibleContexts,
     OverloadedStrings,
-    RecordWildCards,
-    TemplateHaskell,
-    DeriveDataTypeable
+    RecordWildCards
   default-language:    Haskell2010
   type:       exitcode-stdio-1.0
   main-is:    test/acme-test.hs
   hs-source-dirs: .    test
   build-depends:
     acme,
-    base >=4.9 && <4.10,
+    base >=4.8 && <4.10,
     aeson,
     async,
-    base64-bytestring,
     bytestring,
-    cryptohash,
     filepath,
-    groom,
     http-client,
     http-conduit,
     http-types,
-    jose,
-    lens,
-    lens-aeson,
     network,
     network-uri,
-    time,
     transformers,
     yaml,
     -- test
     file-embed,
     tasty,
-    tasty-hspec > 1.1.3,
     tasty-hunit,
-    tasty-quickcheck,
-    tasty-smallcheck,
     -- dev
     hindent
   ghc-options:
