@@ -1,38 +1,8 @@
-cache:
-    key: "$CI_BUILD_REF_NAME"
-    paths:
-        - .cabal-sandbox/
-        - dist/
-
-stages:
-    - prepare
-    - build
-    - test
-    - coverage
-
-update_job:
-    stage: prepare
-    script: cabal update
-
-sandbox_job:
-    stage: prepare
-    script: cabal sandbox init
-
-
 build_job:
-    stage: build
     script:
         - cabal update
         - cabal sandbox init
         - cabal install --enable-tests --enable-coverage
-
-test_job:
-    stage: test
-    script:
         - cabal test acme-unit
-
-coverage_job:
-    stage: coverage
-    script:
         - cat dist/hpc/vanilla/html/acme-unit/hpc_index.html
 
