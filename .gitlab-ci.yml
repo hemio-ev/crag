@@ -1,6 +1,8 @@
 cache:
-    key: "$CI_BUILD_NAME"
-    untracked: true
+    key: "$CI_BUILD_REF_NAME"
+    paths:
+        - .cabal-sandbox/
+        - dist/
 
 stages:
     - prepare
