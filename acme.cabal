@@ -98,15 +98,51 @@ executable acme
     -fwarn-monomorphism-restriction
     -fwarn-unused-do-bind
 
-test-suite acme-test
+test-suite acme-unit
   default-extensions:
     DeriveGeneric,
     OverloadedStrings,
     RecordWildCards
   default-language:    Haskell2010
   type:       exitcode-stdio-1.0
-  main-is:    test/acme-test.hs
+  main-is:    test/acme-unit.hs
   hs-source-dirs: .    test
+  build-depends:
+    acme,
+    base >=4.8 && <4.10,
+    aeson,
+    async,
+    bytestring,
+    filepath,
+    http-client,
+    http-conduit,
+    http-types,
+    network,
+    network-uri,
+    transformers,
+    yaml,
+    -- test
+    file-embed,
+    tasty,
+    tasty-hunit,
+    -- dev
+    hindent
+  ghc-options:
+    -Wall
+    -fwarn-tabs
+    -fwarn-incomplete-record-updates
+    -fwarn-monomorphism-restriction
+    -fwarn-unused-do-bind
+
+test-suite acme-integration
+  default-extensions:
+    DeriveGeneric,
+    OverloadedStrings,
+    RecordWildCards
+  default-language:    Haskell2010
+  type:       exitcode-stdio-1.0
+  main-is:    test/acme-integration.hs
+  hs-source-dirs: . test
   build-depends:
     acme,
     base >=4.8 && <4.10,

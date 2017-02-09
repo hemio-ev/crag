@@ -2,5 +2,9 @@ build_job:
     script:
         - cabal update
         - cabal sandbox init
-        - cabal install --enable-tests
+        - cabal install --enable-tests --enable-coverage
 
+test_job:
+    script:
+        - cabal test acme-unit
+        - cat dist/hpc/vanilla/html/acme-unit/hpc_index.html

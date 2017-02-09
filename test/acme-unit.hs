@@ -10,13 +10,12 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import Network.ACME
-import T1
 
 main :: IO ()
 main = defaultMain tests
 
 tests :: TestTree
-tests = testGroup "Tests" [unitTests, integrationTests]
+tests = testGroup "Unit Tests" [unitTests]
 
 unitTests :: TestTree
 unitTests =
@@ -28,5 +27,3 @@ unitTests =
       in jwkThumbprint jwk @?= "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs"
     ]
 
-integrationTests :: TestTree
-integrationTests = testGroup "Network.ACME (Integration)" [completeUntiCert]
