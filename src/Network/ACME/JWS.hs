@@ -17,6 +17,7 @@ This module provides the necessary tweaks to the JOSE library.
 module Network.ACME.JWS
   ( module Network.ACME.JWS
   , KeyMaterial
+  , Base64Octets(..)
   ) where
 
 import Control.Lens (preview, makeLenses, (&), (?~), at)
@@ -24,6 +25,7 @@ import Control.Lens.Operators ((^?!))
 import Control.Monad.Trans.Except
 import Crypto.Hash.SHA256 (hash)
 import Crypto.JOSE
+import Crypto.JOSE.Types (Base64Octets(..))
 import Data.Aeson
 import Data.Aeson.Encoding
 import Data.Aeson.Lens

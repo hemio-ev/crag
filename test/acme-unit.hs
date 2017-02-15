@@ -26,4 +26,3 @@ unitTests =
           jwk = fromJust (decode file) :: KeyMaterial
       in jwkThumbprint jwk @?= "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs"
     ]
-

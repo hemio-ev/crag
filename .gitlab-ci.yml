@@ -4,5 +4,4 @@ build_job:
         - cabal sandbox init
         - cabal install --enable-tests --enable-coverage
         - cabal test acme-unit
-        - cat dist/hpc/vanilla/html/acme-unit/hpc_index.html
 

@@ -161,6 +161,10 @@ test-suite acme-integration
     file-embed,
     tasty,
     tasty-hunit,
+    pkcs10,
+    cryptonite,
+    x509,
+    pem,
     -- dev
     hindent
   ghc-options:
