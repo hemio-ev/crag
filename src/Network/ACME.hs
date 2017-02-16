@@ -260,7 +260,7 @@ parseJsonResult req bod res
   | isExpectedResponseStatus res req =
     case eitherDecode (getResponseBody res) of
       Right x -> return x
-      Left msg -> throwE $ DecodingError msg $ L.unpack $ getResponseBody res
+      Left msg -> throwE $ DecodingError msg $ show $ getResponseBody res
   | otherwise =
     throwE $
     case eitherDecode (getResponseBody res) of

@@ -48,7 +48,7 @@ showRequestError (RequestErrorDetail r s d b) =
   B.unpack (encodePretty defConfig d) ++
   "\nRequest Body:\n" ++ L.unpack (fromMaybe "EMPTY" b)
 showRequestError (DecodingError msg original) =
-  "The stuff could not be decoded:\n" ++ msg ++ "\n\n" ++ original
+  "The response body could not be decode\nerror: " ++ msg ++ "\nbody:\n" ++ original
 showRequestError x = show x
 
 showStatus :: Status -> String

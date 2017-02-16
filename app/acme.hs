@@ -1,12 +1,7 @@
 module Main where
 
-import Control.Monad.Trans.Except
-import Crypto.JOSE
-import Crypto.JOSE.Types
 import Data.Aeson
-import qualified Data.ByteString.Base64.URL as Base64
 import qualified Data.ByteString.Char8 as B
-import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Maybe
 import Data.Yaml (decodeFileEither)
 import Data.Yaml.Pretty
