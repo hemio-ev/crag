@@ -51,19 +51,18 @@ setDnsTxt hostName rdata = do
       object
         ["host" .= ("_acme-challenge." ++ hostName ++ "."), "value" .= rdata]
 
-completeUntiCert :: TestTree
-completeUntiCert =
-  testCaseSteps "Complete until certificate" $ \step -> do
-    let domain = "hemev-test-5.xyz" :: String
+unitAccToCert :: TestTree
+unitAccToCert =
+  testCaseSteps "From new account to signed certificate" $ \step -> do
+    let domain = "hemev-test-7.xyz" :: String
     step "acmePerformDirectory"
     directory <- assertExceptT $ acmePerformDirectory confUrl
-    accStub <- newAcmeObjAccountStub "sophie_test_2@hemio.de"
+    accStub <- newAcmeObjAccountStub "email@example.org"
     let acc =
           accStub
           {acmeObjAccountAgreement = parseURI "http://boulder:4000/terms/v1"}
     step "acmePerformNewAccount"
-    accReturned <- assertExceptT $ acmePerformNewAccount acc directory
-    acmeObjAccountContact accReturned @?= acmeObjAccountContact acc
+    _ <- assertExceptT $ acmePerformNewAccount acc directory
     step "acmePerformNewAuthz"
     authz <-
       assertExceptT $ acmePerformNewAuthz (acmeNewDnsAuthz domain) acc directory
@@ -88,7 +87,27 @@ completeUntiCert =
     crt <- assertExceptT $ acmePerformNewOrder cert acc directory
     extensionGet (certExtensions $ getCertificate crt) @?=
       Just (ExtSubjectAltName [AltNameDNS domain])
-    step "Done."
+
+unitAccount :: TestTree
+unitAccount =
+  testCaseSteps "Account operations" $ \step -> do
+    step "acmePerformDirectory"
+    directory <- assertExceptT $ acmePerformDirectory confUrl
+    acc <- newAcmeObjAccountStub email1
+    step "acmePerformNewAccount"
+    accReturned <- assertExceptT $ acmePerformNewAccount acc directory
+    acmeObjAccountContact accReturned @?= acmeObjAccountContact acc
+    step "acmePerformAccountURI"
+    _ <- assertExceptT $ acmePerformAccountURI acc directory
+    -- Update account
+    let acc' = acc {acmeObjAccountContact = Just ["mailto:" ++ email2]}
+    step "acmePerformUpdateAccount"
+    accReturned' <- assertExceptT $ acmePerformUpdateAccount acc' directory
+    acmeObjAccountContact accReturned' @?= acmeObjAccountContact acc'
+    return ()
+  where
+    email1 = "email1@example.org" :: String
+    email2 = "email2@example.org" :: String
 
 assertExceptT :: ExceptT RequestError IO a -> IO a
 assertExceptT y =
