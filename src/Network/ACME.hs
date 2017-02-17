@@ -1,8 +1,6 @@
 module Network.ACME
   ( module Network.ACME
-  , module Network.ACME.JWS
-  , module Network.ACME.Types
-  , module Network.ACME.Errors
+  , module X
   ) where
 
 import Control.Monad.Trans.Except
@@ -12,11 +10,12 @@ import Data.Aeson.Types (emptyObject)
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Foldable
 import Data.Maybe
+import qualified Data.X509 as X509
 
-import Network.ACME.Errors
+import Network.ACME.Errors as X
 import Network.ACME.HTTP
-import Network.ACME.JWS
-import Network.ACME.Types
+import Network.ACME.JWS as X
+import Network.ACME.Types as X
 
 -- * Perform Requests
 -- | Get all supported resources from server
@@ -82,7 +81,7 @@ acmePerformExistingAuthz authz acc dir =
   case acmeObjDirectoryNewAuthz dir of
     Nothing -> throwE (RequestNotSupported "new-authz")
     Just req ->
-      newJwsObj (reqMod req) (authzMod) acc dir >>= acmeHttpPost req >>= resBody
+      newJwsObj (reqMod req) authzMod acc dir >>= acmeHttpPost req >>= resBody
   where
     authzMod = authz {acmeObjNewAuthzExisting = Just "require"}
     reqMod :: AcmeRequestNewAuthz -> AcmeRequestExistingAuthz
@@ -103,17 +102,23 @@ acmePerformNewOrder
   :: AcmeObjOrder
   -> AcmeObjAccount
   -> AcmeObjDirectory
-  -> ExceptT RequestError IO L.ByteString
+  -> ExceptT RequestError IO X509.SignedCertificate
 acmePerformNewOrder app acc dir =
   case guessedNewOrderRequest of
     Nothing -> throwE (RequestNotSupported "new-app")
-    Just req ->
-      acmeResponseBody <$> (newJwsObj req app acc dir >>= acmeHttpPost req)
+    Just req -> do
+      reqBody <- newJwsObj req app acc dir
+      res <- acmeHttpPost req reqBody
+      decodeCert $ acmeResponseBody res
   where
     guessedNewOrderRequest =
       case acmeObjDirectoryNewOrder dir of
         Nothing -> acmeObjDirectoryNewCert dir
         x -> x
+    decodeCert b =
+      case X509.decodeSignedCertificate (L.toStrict b) of
+        Right c -> return c
+        Left e -> throwE (ErrDecodeX509 e (show b))
 
 -- | Get new nonce
 acmePerformNonce :: AcmeObjDirectory -> ExceptT RequestError IO AcmeJwsNonce
@@ -158,7 +163,7 @@ acmeKeyAuthorization ch acc =
 newAcmeObjAccountStub :: String -> IO AcmeObjAccount
 newAcmeObjAccountStub mail = do
   keyMat <- genKeyMaterial (RSAGenParam 256)
-  return $
+  return
     AcmeObjAccount
     { acmeObjAccountKey = keyMat
     , acmeObjAccountContact = Just ["mailto:" ++ mail]

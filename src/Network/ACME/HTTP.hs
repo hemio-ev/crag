@@ -50,9 +50,9 @@ acmeHttpPost
   => a -- ^ Request
   -> JWS AcmeJwsHeader
   -> ExceptT RequestError IO AcmeResponse
-acmeHttpPost req bod = do
-  parseResult req (Just bod') =<<
-    httpLBS (setRequestBodyLBS bod' $ newHttpRequest POST req)
+acmeHttpPost req bod =
+  httpLBS (setRequestBodyLBS bod' $ newHttpRequest POST req) >>=
+  parseResult req (Just bod')
   where
     bod' = encode $ toJSONflat bod
 
@@ -61,16 +61,14 @@ acmeHttpGet
   :: (AcmeRequest a)
   => a -- ^ Request
   -> ExceptT RequestError IO AcmeResponse
-acmeHttpGet req = parseResult req Nothing =<< httpLBS (newHttpRequest GET req)
+acmeHttpGet req = httpLBS (newHttpRequest GET req) >>= parseResult req Nothing
 
 -- | Perform HEAD query
 acmeHttpHead
   :: (AcmeRequest a)
   => a -- ^ Request
   -> ExceptT RequestError IO AcmeResponse
-acmeHttpHead req = do
-  res <- httpLBS (newHttpRequest HEAD req)
-  parseResult req Nothing res
+acmeHttpHead req = httpLBS (newHttpRequest HEAD req) >>= parseResult req Nothing
 
 -- | Transforms abstract ACME to concrete HTTP request
 newHttpRequest
@@ -79,7 +77,7 @@ newHttpRequest
   -> a -- ^ ACME Request
   -> Request
 newHttpRequest meth acmeReq =
-  setRequestMethod (renderStdMethod meth) $ (parseRequest_ url)
+  setRequestMethod (renderStdMethod meth) (parseRequest_ url)
   where
     url = show (acmeRequestUrl acmeReq)
 

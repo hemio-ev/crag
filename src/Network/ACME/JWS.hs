@@ -95,8 +95,7 @@ jwsSigned
 jwsSigned payload url = signWith (newJWS $ toStrict $ encode payload')
   where
     payload' =
-      toJSON payload & _Object . at "resource" ?~
-      toJSON ((pathSegments url) !! 1)
+      toJSON payload & _Object . at "resource" ?~ toJSON (pathSegments url !! 1)
 
 signWith
   :: JWS AcmeJwsHeader

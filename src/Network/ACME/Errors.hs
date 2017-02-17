@@ -39,6 +39,8 @@ data RequestError
   | HeaderNotFound HeaderName
   | ResponseHeaderDecodeError String
                               String
+  | ErrDecodeX509 String
+                  String
   deriving (Show)
 
 showRequestError :: RequestError -> String

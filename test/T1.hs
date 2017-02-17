@@ -8,6 +8,7 @@ import Data.Aeson
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Maybe
+import Data.X509
 import Data.X509.PKCS10
 import Network.ACME
 import Network.HTTP.Simple
@@ -16,8 +17,8 @@ import Network.URI
 import Test.Tasty
 import Test.Tasty.HUnit
 
-crt :: String -> IO B.ByteString
-crt domain = do
+newCrt :: String -> IO B.ByteString
+newCrt domain = do
   let rsaKeySize = 256 :: Int
   let publicExponent = 0x10001 :: Integer
   (pubKey, privKey) <- generate rsaKeySize publicExponent
@@ -53,15 +54,16 @@ setDnsTxt hostName rdata = do
 completeUntiCert :: TestTree
 completeUntiCert =
   testCaseSteps "Complete until certificate" $ \step -> do
-    let domain = "hemev-test-1.xyz" :: String
+    let domain = "hemev-test-5.xyz" :: String
     step "acmePerformDirectory"
     directory <- assertExceptT $ acmePerformDirectory confUrl
-    accStub <- (newAcmeObjAccountStub "sophie_test_2@hemio.de")
+    accStub <- newAcmeObjAccountStub "sophie_test_2@hemio.de"
     let acc =
           accStub
           {acmeObjAccountAgreement = parseURI "http://boulder:4000/terms/v1"}
     step "acmePerformNewAccount"
     accReturned <- assertExceptT $ acmePerformNewAccount acc directory
+    acmeObjAccountContact accReturned @?= acmeObjAccountContact acc
     step "acmePerformNewAuthz"
     authz <-
       assertExceptT $ acmePerformNewAuthz (acmeNewDnsAuthz domain) acc directory
@@ -80,10 +82,12 @@ completeUntiCert =
       "keyAuthorization not accepted"
     step "(delay)"
     threadDelay (1 * 1000000)
-    csr <- crt domain
+    csr <- newCrt domain
     step "acmePerformNewOrder"
     let cert = newAcmeObjOrder (Base64Octets csr)
-    _ <- assertExceptT $ acmePerformNewOrder cert acc directory
+    crt <- assertExceptT $ acmePerformNewOrder cert acc directory
+    extensionGet (certExtensions $ getCertificate crt) @?=
+      Just (ExtSubjectAltName [AltNameDNS domain])
     step "Done."
 
 assertExceptT :: ExceptT RequestError IO a -> IO a
