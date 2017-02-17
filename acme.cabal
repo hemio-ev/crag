@@ -30,6 +30,7 @@ library
     Network.ACME.JWS
     Network.ACME.Internal
     Network.ACME.Errors
+    Network.ACME.HTTP
   build-depends:
     base >=4.8 && <4.10,
     aeson,
