@@ -17,44 +17,10 @@ import Network.URI
 import Test.Tasty
 import Test.Tasty.HUnit
 
-newCrt :: String -> IO B.ByteString
-newCrt domain = do
-  let rsaKeySize = 256 :: Int
-  let publicExponent = 0x10001 :: Integer
-  (pubKey, privKey) <- generate rsaKeySize publicExponent
-  let subjectAttrs =
-        makeX520Attributes
-          [(X520CommonName, domain), (X520OrganizationName, domain)]
-  Right req <-
-    generateCSR
-      subjectAttrs
-      (PKCS9Attributes [])
-      (KeyPairRSA pubKey privKey)
-      SHA512
-  return $ toDER req
-
-confUrl :: AcmeRequestDirectory
-confUrl = fromJust $ decode "\"http://172.17.0.1:4000/directory\""
-
-setDnsTxt :: String -> String -> IO (Response L.ByteString)
-setDnsTxt hostName rdata = do
-  res <- httpLBS req
-  getResponseStatus res @?= status200
-  return res
-  where
-    req =
-      setRequestBodyLBS
-        body
-        (parseRequest_ "POST http://172.17.0.1:8055/set-txt")
-    body =
-      encode $
-      object
-        ["host" .= ("_acme-challenge." ++ hostName ++ "."), "value" .= rdata]
-
-unitAccToCert :: TestTree
-unitAccToCert =
+testAccToCert :: TestTree
+testAccToCert =
   testCaseSteps "From new account to signed certificate" $ \step -> do
-    let domain = "hemev-test-7.xyz" :: String
+    let domain = "hemev-test-2.xyz" :: String
     step "acmePerformDirectory"
     directory <- assertExceptT $ acmePerformDirectory confUrl
     accStub <- newAcmeObjAccountStub "email@example.org"
@@ -88,26 +54,70 @@ unitAccToCert =
     extensionGet (certExtensions $ getCertificate crt) @?=
       Just (ExtSubjectAltName [AltNameDNS domain])
 
-unitAccount :: TestTree
-unitAccount =
+testAccount :: TestTree
+testAccount =
   testCaseSteps "Account operations" $ \step -> do
     step "acmePerformDirectory"
     directory <- assertExceptT $ acmePerformDirectory confUrl
-    acc <- newAcmeObjAccountStub email1
     step "acmePerformNewAccount"
+    acc <- newAcmeObjAccountStub email1
     accReturned <- assertExceptT $ acmePerformNewAccount acc directory
     acmeObjAccountContact accReturned @?= acmeObjAccountContact acc
     step "acmePerformAccountURI"
     _ <- assertExceptT $ acmePerformAccountURI acc directory
     -- Update account
+    step "acmePerformUpdateAccount (contact)"
     let acc' = acc {acmeObjAccountContact = Just ["mailto:" ++ email2]}
-    step "acmePerformUpdateAccount"
     accReturned' <- assertExceptT $ acmePerformUpdateAccount acc' directory
     acmeObjAccountContact accReturned' @?= acmeObjAccountContact acc'
+    step "acmePerformAccountKeyRollover"
+    accNew <- newAcmeObjAccountStub email1
+    _ <- assertExceptT $ acmePerformAccountKeyRollover acc accNew directory
+    --step "acmePerformUpdateAccount (status=deactivated)"
+    --let acc'' = acc' {acmeObjAccountStatus = Just "deactivated"}
+    --accReturned'' <- assertExceptT $ acmePerformUpdateAccount acc'' directory
+    --acmeObjAccountStatus accReturned'' @?= Just "deactivated"
+    --this should fail
+    --_ <- assertExceptT $ acmePerformUpdateAccount acc directory
+    --TODO: ASSERT FOR FAIL
     return ()
   where
     email1 = "email1@example.org" :: String
     email2 = "email2@example.org" :: String
+
+newCrt :: String -> IO B.ByteString
+newCrt domain = do
+  let rsaKeySize = 256 :: Int
+  let publicExponent = 0x10001 :: Integer
+  (pubKey, privKey) <- generate rsaKeySize publicExponent
+  let subjectAttrs =
+        makeX520Attributes
+          [(X520CommonName, domain), (X520OrganizationName, domain)]
+  Right req <-
+    generateCSR
+      subjectAttrs
+      (PKCS9Attributes [])
+      (KeyPairRSA pubKey privKey)
+      SHA512
+  return $ toDER req
+
+confUrl :: AcmeRequestDirectory
+confUrl = fromJust $ decode "\"http://172.17.0.1:4000/directory\""
+
+setDnsTxt :: String -> String -> IO (Response L.ByteString)
+setDnsTxt hostName rdata = do
+  res <- httpLBS req
+  getResponseStatus res @?= status200
+  return res
+  where
+    req =
+      setRequestBodyLBS
+        body
+        (parseRequest_ "POST http://172.17.0.1:8055/set-txt")
+    body =
+      encode $
+      object
+        ["host" .= ("_acme-challenge." ++ hostName ++ "."), "value" .= rdata]
 
 assertExceptT :: ExceptT RequestError IO a -> IO a
 assertExceptT y =

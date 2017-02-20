@@ -39,6 +39,14 @@ import Network.URI (URI, pathSegments)
 
 import Network.ACME.Types (AcmeJwsNonce)
 
+data AcmeJws =
+  AcmeJws (JWS AcmeJwsHeader)
+
+-- | Generates JWS with /Flattened JWS JSON Serialization Syntax/
+instance ToJSON AcmeJws where
+  toJSON (AcmeJws (JWS p [s])) = toJSON s & _Object . at "payload" ?~ toJSON p
+  toJSON _ = undefined
+
 -- | Enhanced 'JWSHeader' with additional header parameters
 data AcmeJwsHeader = AcmeJwsHeader
   { _jwsStandardHeader :: JWSHeader
@@ -65,7 +73,7 @@ newAcmeJwsHeader jwk nonce =
   where
     header' =
       (newJWSHeader (Unprotected, alg))
-      {_jwsHeaderJwk = Just $ HeaderParam Unprotected jwkPublic}
+      {_jwsHeaderJwk = Just $ HeaderParam Unprotected (jwkPublic jwk)}
     alg :: Alg
     alg =
       case bestJWSAlg jwk of
@@ -74,16 +82,12 @@ newAcmeJwsHeader jwk nonce =
         -- 'detail: signature type 'PS512' in JWS header is not supported'
         Right PS512 -> RS256
         Right x -> x
-    -- Removes private key
-    jwkPublic :: JWK
-    jwkPublic = fromJust $ preview asPublicKey jwk
 
--- | Generates JWS with /Flattened JWS JSON Serialization Syntax/
-toJSONflat
-  :: HasParams t
-  => JWS t -> Value
-toJSONflat (JWS p [s]) = toJSON s & _Object . at "payload" ?~ toJSON p
-toJSONflat (JWS _ _) = undefined
+-- | Removes private key
+jwkPublic
+  :: AsPublicKey a
+  => a -> a
+jwkPublic jwk = fromJust $ preview asPublicKey jwk
 
 jwsSigned
   :: (ToJSON a)

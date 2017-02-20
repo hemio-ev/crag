@@ -18,6 +18,7 @@ import Network.ACME.JWS as X
 import Network.ACME.Types as X
 
 -- * Perform Requests
+-- ** Directory
 -- | Get all supported resources from server
 acmePerformDirectory :: AcmeRequestDirectory
                      -> ExceptT RequestError IO AcmeObjDirectory
@@ -26,6 +27,7 @@ acmePerformDirectory acmeReq =
   where
     addDirectory x = x {acmeObjDirectory = Just acmeReq}
 
+-- ** Account
 -- | Registeres new account
 acmePerformNewAccount :: AcmeObjAccount
                       -> AcmeObjDirectory
@@ -60,6 +62,25 @@ acmePerformUpdateAccount acc dir = do
   body <- newJwsObj req acc acc dir
   acmeHttpPost req body >>= resBody
 
+-- | Key Roll-over
+acmePerformAccountKeyRollover
+  :: AcmeObjAccount -- ^ Account with current key
+  -> AcmeObjAccount -- ^ Same account with new key
+  -> AcmeObjDirectory
+  -> ExceptT RequestError IO AcmeObjAccount
+acmePerformAccountKeyRollover current new dir =
+  case acmeObjDirectoryKeyChange dir of
+    Nothing -> throwE (RequestNotSupported "key-change")
+    Just req -> do
+      accUrl <- acmePerformAccountURI current dir
+      let objRollover =
+            AcmeObjAccountKeyRollover (jwkPublic $ acmeObjAccountKey new) accUrl
+      innerJws <- newJwsObj req objRollover new dir
+      outerJws <- newJwsObj req innerJws current dir
+      --error $ L.unpack $ encode outerJws
+      acmeHttpPost req outerJws >>= resBody
+
+-- ** Authorization
 -- | New authorization
 acmePerformNewAuthz
   :: AcmeObjNewAuthz
@@ -97,6 +118,7 @@ acmePerformRespondChallenge
 acmePerformRespondChallenge req ch acc dir =
   newJwsObj req ch acc dir >>= acmeHttpPost req >>= resBody
 
+-- ** Certificates
 -- | Create new application (handing in a certificate request)
 acmePerformNewOrder
   :: AcmeObjOrder
@@ -120,6 +142,7 @@ acmePerformNewOrder app acc dir =
         Right c -> return c
         Left e -> throwE (ErrDecodeX509 e (show b))
 
+-- ** Nonce
 -- | Get new nonce
 acmePerformNonce :: AcmeObjDirectory -> ExceptT RequestError IO AcmeJwsNonce
 acmePerformNonce d =
@@ -184,8 +207,9 @@ newJwsObj
   -> o -- ^ Request body
   -> AcmeObjAccount -- ^ Signing account
   -> AcmeObjDirectory -- ^ The directory of the server
-  -> ExceptT RequestError IO (JWS AcmeJwsHeader)
+  -> ExceptT RequestError IO (AcmeJws)
 newJwsObj req obj acc dir = do
   nonce <- acmePerformNonce dir
   RequestJwsError `withExceptT`
-    jwsSigned obj (acmeRequestUrl req) (acmeObjAccountKey acc) nonce
+    (AcmeJws <$>
+     jwsSigned obj (acmeRequestUrl req) (acmeObjAccountKey acc) nonce)

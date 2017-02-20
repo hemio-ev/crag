@@ -48,13 +48,13 @@ resBody res =
 acmeHttpPost
   :: AcmeRequest a
   => a -- ^ Request
-  -> JWS AcmeJwsHeader
+  -> AcmeJws
   -> ExceptT RequestError IO AcmeResponse
 acmeHttpPost req bod =
   httpLBS (setRequestBodyLBS bod' $ newHttpRequest POST req) >>=
   parseResult req (Just bod')
   where
-    bod' = encode $ toJSONflat bod
+    bod' = encode bod
 
 -- | Perform GET query
 acmeHttpGet

@@ -23,7 +23,7 @@ data AcmeObjDirectory = AcmeObjDirectory
   , acmeObjDirectoryNewOrder :: Maybe AcmeRequestNewOrder
   , acmeObjDirectoryNewAuthz :: Maybe AcmeRequestNewAuthz
   , acmeObjDirectoryRevokeCert :: Maybe URI -- ^ Revoke certificate
-  , acmeObjDirectoryKeyChange :: Maybe URI -- ^ Key change
+  , acmeObjDirectoryKeyChange :: Maybe AcmeRequestAccountKeyRollover
   , acmeObjDirectoryMeta :: Maybe AcmeDirectoryMeta
   , acmeObjDirectoryNewCert :: Maybe AcmeRequestNewOrder -- ^ Boulder legacy
   , acmeObjDirectoryNewReg :: Maybe AcmeRequestNewAccount -- ^ Boulder legacy
@@ -84,7 +84,7 @@ instance AcmeRequest AcmeRequestNewAccount where
   acmeRequestUrl (AcmeRequestNewAccount u) = u
   acmeRequestExpectedStatus = const created201
 
--- ** Recover Account URI
+-- ** Retrive URI
 newtype AcmeRequestAccountURI =
   AcmeRequestAccountURI URI
   deriving (Show, Generic)
@@ -93,14 +93,35 @@ instance AcmeRequest AcmeRequestAccountURI where
   acmeRequestUrl (AcmeRequestAccountURI u) = u
   acmeRequestExpectedStatus = const conflict409
 
--- ** Update Account
+-- ** Update
 newtype AcmeRequestUpdateAccount =
   AcmeRequestUpdateAccount URI
   deriving (Show, Generic)
 
+instance ToJSON AcmeRequestUpdateAccount
+
 instance AcmeRequest AcmeRequestUpdateAccount where
   acmeRequestUrl (AcmeRequestUpdateAccount u) = u
   acmeRequestExpectedStatus = const accepted202
+
+-- ** Key Rollover
+data AcmeObjAccountKeyRollover = AcmeObjAccountKeyRollover
+  { acmeObjAccountKeyRolloverNew_Key :: KeyMaterial
+  , acmeObjAccountKeyRolloverAccount :: AcmeRequestUpdateAccount
+  } deriving (Show, Generic)
+
+instance ToJSON AcmeObjAccountKeyRollover where
+  toJSON = toAcmeRequestBody "acmeObjAccountKeyRollover"
+
+newtype AcmeRequestAccountKeyRollover =
+  AcmeRequestAccountKeyRollover URI
+  deriving (Show, Generic)
+
+instance FromJSON AcmeRequestAccountKeyRollover
+
+instance AcmeRequest AcmeRequestAccountKeyRollover where
+  acmeRequestUrl (AcmeRequestAccountKeyRollover u) = u
+  acmeRequestExpectedStatus = const ok200
 
 -- * ACME Authorization
 -- | Authorization

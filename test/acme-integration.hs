@@ -11,4 +11,4 @@ tests :: TestTree
 tests = testGroup "Integration Tests" [integrationTests]
 
 integrationTests :: TestTree
-integrationTests = testGroup "Network.ACME" [unitAccToCert, unitAccount]
+integrationTests = testGroup "Network.ACME" [testAccToCert, testAccount]
