@@ -5,6 +5,7 @@ import Crypto.JOSE
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Maybe
+import Data.Typeable
 import Data.Yaml.Pretty
 import Network.HTTP.Types
 
@@ -20,6 +21,12 @@ handleError x = do
 maybeToExceptT :: RequestError -> Maybe a -> ExceptT RequestError IO a
 maybeToExceptT e Nothing = throwE e
 maybeToExceptT _ (Just x) = return x
+
+throwRequestNotSupported
+  :: AcmeRequest a
+  => Maybe a -> ExceptT RequestError IO b
+throwRequestNotSupported x =
+  throwE $ RequestNotSupported (show $ head $ typeRepArgs $ typeOf x)
 
 data RequestError
   = RequestErrorDetail String

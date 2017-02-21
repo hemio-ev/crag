@@ -33,11 +33,12 @@ acmePerformDirectory acmeReq =
 acmePerformAccountNew :: AcmeObjAccount
                       -> AcmeObjDirectory
                       -> ExceptT RequestError IO AcmeObjAccount
-acmePerformAccountNew acc dir = do
-  body <- acmeNewJwsBody req acc acc dir
-  acmeHttpPost req body >>= resBody
-  where
-    req = fromJust $ acmeObjDirectoryNewReg dir
+acmePerformAccountNew acc dir =
+  case acmeObjDirectoryNewReg dir of
+    req@Nothing -> throwRequestNotSupported req
+    Just req -> do
+      body <- acmeNewJwsBody req acc acc dir
+      acmeHttpPost req body >>= resBody
 
 -- TODO: Only supports bolder legacy
 -- | Recover the account uri
@@ -72,7 +73,7 @@ acmePerformAccountKeyRollover
   -> ExceptT RequestError IO AcmeObjAccount
 acmePerformAccountKeyRollover current new dir =
   case acmeObjDirectoryKeyChange dir of
-    Nothing -> throwE (RequestNotSupported "key-change")
+    req@Nothing -> throwRequestNotSupported req
     Just req -> do
       accUrl <- acmePerformAccountURI current dir
       let objRollover =
@@ -90,7 +91,7 @@ acmePerformAuthorizationNew
   -> ExceptT RequestError IO AcmeObjAuthorization
 acmePerformAuthorizationNew authz acc dir =
   case acmeObjDirectoryNewAuthz dir of
-    Nothing -> throwE (RequestNotSupported "new-authz")
+    req@Nothing -> throwRequestNotSupported req
     Just req -> do
       body <- acmeNewJwsBody req authz acc dir
       acmeHttpPost req body >>= resBody
@@ -103,7 +104,7 @@ acmePerformAuthorizationExisting
   -> ExceptT RequestError IO AcmeObjAuthorization
 acmePerformAuthorizationExisting authz acc dir =
   case acmeObjDirectoryNewAuthz dir of
-    Nothing -> throwE (RequestNotSupported "new-authz")
+    req@Nothing -> throwRequestNotSupported req
     Just req -> do
       body <- acmeNewJwsBody (reqMod req) authzMod acc dir
       acmeHttpPost req body >>= resBody
@@ -132,10 +133,10 @@ acmePerformOrderNew
   -> ExceptT RequestError IO X509.SignedCertificate
 acmePerformOrderNew app acc dir =
   case guessedNewOrderRequest of
-    Nothing -> throwE (RequestNotSupported "new-app")
+    req@Nothing -> throwRequestNotSupported req
     Just req -> do
-      reqBody <- acmeNewJwsBody req app acc dir
-      res <- acmeHttpPost req reqBody
+      body <- acmeNewJwsBody req app acc dir
+      res <- acmeHttpPost req body
       decodeCert $ acmeResponseBody res
   where
     guessedNewOrderRequest =
@@ -146,6 +147,20 @@ acmePerformOrderNew app acc dir =
       case X509.decodeSignedCertificate (L.toStrict b) of
         Right c -> return c
         Left e -> throwE (ErrDecodeX509 e (show b))
+
+-- | Revoke
+acmePerformCertificateRevoke
+  :: AcmeObjCertificateRevoke
+  -> AcmeObjAccount
+  -> AcmeObjDirectory
+  -> ExceptT RequestError IO ()
+acmePerformCertificateRevoke obj acc dir =
+  case acmeObjDirectoryRevokeCert dir of
+    req@Nothing -> throwRequestNotSupported req
+    Just req -> do
+      body <- acmeNewJwsBody req obj acc dir
+      _ <- acmeHttpPost req body
+      return ()
 
 -- ** Nonce
 -- | Get new nonce
@@ -183,6 +198,15 @@ acmeNewObjOrder xs =
   { acmeObjOrderCsr = xs
   , acmeObjOrderNot_Before = Nothing
   , acmeObjOrderNot_After = Nothing
+  }
+
+acmeNewObjCertificateRevoke :: X509.SignedCertificate
+                            -> AcmeObjCertificateRevoke
+acmeNewObjCertificateRevoke crt =
+  AcmeObjCertificateRevoke
+  { acmeObjCertificateRevokeCertificate =
+      Base64Octets (X509.encodeSignedObject crt)
+  , acmeObjCertificateRevokeReason = Nothing
   }
 
 -- ** Object inquiry 

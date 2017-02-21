@@ -20,7 +20,7 @@ import Test.Tasty.HUnit
 testAccToCert :: TestTree
 testAccToCert =
   testCaseSteps "From new account to signed certificate" $ \step -> do
-    let domain = "hemev-test-2.xyz" :: String
+    let domain = "hemev-test-4.xyz" :: String
     step "acmePerformDirectory"
     directory <- assertExceptT $ acmePerformDirectory confUrl
     accStub <- acmeNewObjAccountStub "email@example.org"
@@ -47,13 +47,16 @@ testAccToCert =
     isJust (acmeObjChallengeKey_Authorization x) @?
       "keyAuthorization not accepted"
     step "(delay)"
-    threadDelay (1 * 1000000)
+    threadDelay (1 * 100000)
     csr <- newCrt domain
     step "acmePerformOrderNew"
     let cert = acmeNewObjOrder (Base64Octets csr)
     crt <- assertExceptT $ acmePerformOrderNew cert acc directory
     extensionGet (certExtensions $ getCertificate crt) @?=
       Just (ExtSubjectAltName [AltNameDNS domain])
+    let revoke = acmeNewObjCertificateRevoke crt
+    _ <- assertExceptT $ acmePerformCertificateRevoke revoke acc directory
+    return ()
 
 testAccount :: TestTree
 testAccount =

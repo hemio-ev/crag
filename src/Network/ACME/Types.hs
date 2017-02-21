@@ -4,6 +4,7 @@ import Crypto.JOSE (KeyMaterial)
 import Crypto.JOSE.Types (Base64Octets)
 import Data.Aeson
 import Data.Time
+import Data.Typeable
 import GHC.Generics
 import Network.HTTP.Types
 import Network.Socket (HostName)
@@ -22,7 +23,7 @@ data AcmeObjDirectory = AcmeObjDirectory
   , acmeObjDirectoryNewAccount :: Maybe AcmeRequestAccountNew
   , acmeObjDirectoryNewOrder :: Maybe AcmeRequestOrderNew
   , acmeObjDirectoryNewAuthz :: Maybe AcmeRequestAuthorziationNew
-  , acmeObjDirectoryRevokeCert :: Maybe URI -- ^ Revoke certificate
+  , acmeObjDirectoryRevokeCert :: Maybe AcmeRequestCertificateRevoke
   , acmeObjDirectoryKeyChange :: Maybe AcmeRequestAccountKeyRollover
   , acmeObjDirectoryMeta :: Maybe AcmeDirectoryMeta
   , acmeObjDirectoryNewCert :: Maybe AcmeRequestOrderNew -- ^ Boulder legacy
@@ -242,9 +243,9 @@ instance AcmeRequest AcmeRequestNonceNew where
   acmeRequestUrl (AcmeRequestNonceNew u) = u
   acmeRequestExpectedStatus = const ok200
 
--- * ACME Application
--- ** New Application
--- | new-app
+-- * ACME Order
+-- ** New order
+-- | new-order
 data AcmeObjOrder = AcmeObjOrder
   { acmeObjOrderCsr :: Base64Octets
   , acmeObjOrderNot_Before :: Maybe ZonedTime
@@ -254,7 +255,7 @@ data AcmeObjOrder = AcmeObjOrder
 instance ToJSON AcmeObjOrder where
   toJSON = toAcmeRequestBody "acmeObjOrder"
 
--- | New application
+-- | New order
 newtype AcmeRequestOrderNew =
   AcmeRequestOrderNew URI
   deriving (Show, Generic)
@@ -265,9 +266,28 @@ instance AcmeRequest AcmeRequestOrderNew where
   acmeRequestUrl (AcmeRequestOrderNew u) = u
   acmeRequestExpectedStatus = const created201
 
+-- * ACME Certificate
+data AcmeObjCertificateRevoke = AcmeObjCertificateRevoke
+  { acmeObjCertificateRevokeCertificate :: Base64Octets
+  , acmeObjCertificateRevokeReason :: Maybe Int
+  } deriving (Show, Generic)
+
+instance ToJSON AcmeObjCertificateRevoke where
+  toJSON = toAcmeRequestBody "acmeObjCertificateRevoke"
+
+newtype AcmeRequestCertificateRevoke =
+  AcmeRequestCertificateRevoke URI
+  deriving (Show, Generic)
+
+instance FromJSON AcmeRequestCertificateRevoke
+
+instance AcmeRequest AcmeRequestCertificateRevoke where
+  acmeRequestUrl (AcmeRequestCertificateRevoke u) = u
+  acmeRequestExpectedStatus = const ok200
+
 -- * Misc
 -- | Request class
-class Show a =>
+class (Show a, Typeable a) =>
       AcmeRequest a where
   acmeRequestUrl :: a -> URI
   acmeRequestExpectedStatus :: a -> Status
