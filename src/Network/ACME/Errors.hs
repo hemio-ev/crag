@@ -7,6 +7,7 @@ import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Maybe
 import Data.Typeable
 import Data.Yaml.Pretty
+import Network.HTTP.Client
 import Network.HTTP.Types
 
 import Network.ACME.Types
@@ -48,6 +49,7 @@ data RequestError
                               String
   | ErrDecodeX509 String
                   String
+  | ErrHttp HttpException
   deriving (Show)
 
 showRequestError :: RequestError -> String

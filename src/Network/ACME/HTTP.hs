@@ -1,5 +1,6 @@
 module Network.ACME.HTTP where
 
+import Control.Exception
 import Control.Monad.Trans.Except
 import Data.Aeson
 import qualified Data.ByteString.Char8 as B
@@ -50,8 +51,8 @@ acmeHttpPost
   -> AcmeJws
   -> ExceptT RequestError IO AcmeResponse
 acmeHttpPost req bod =
-  httpLBS (setRequestBodyLBS bod' $ newHttpRequest POST req) >>=
-  parseResult req (Just bod')
+  parseResult req (Just bod') $
+  httpLBS (setRequestBodyLBS bod' $ newHttpRequest POST req)
   where
     bod' = encode bod
 
@@ -60,14 +61,14 @@ acmeHttpGet
   :: (AcmeRequest a)
   => a -- ^ Request
   -> ExceptT RequestError IO AcmeResponse
-acmeHttpGet req = httpLBS (newHttpRequest GET req) >>= parseResult req Nothing
+acmeHttpGet req = parseResult req Nothing $ httpLBS (newHttpRequest GET req)
 
 -- | Perform HEAD query
 acmeHttpHead
   :: (AcmeRequest a)
   => a -- ^ Request
   -> ExceptT RequestError IO AcmeResponse
-acmeHttpHead req = httpLBS (newHttpRequest HEAD req) >>= parseResult req Nothing
+acmeHttpHead req = parseResult req Nothing $ httpLBS (newHttpRequest HEAD req)
 
 -- | Transforms abstract ACME to concrete HTTP request
 newHttpRequest
@@ -85,18 +86,25 @@ parseResult
   :: (AcmeRequest a)
   => a
   -> Maybe L.ByteString -- ^ Body
-  -> Response L.ByteString
+  -> IO (Response L.ByteString)
   -> ExceptT RequestError IO AcmeResponse
-parseResult req bod res
-  | isExpectedResponseStatus res req =
-    return $ AcmeResponse (getResponseHeaders res) (getResponseBody res)
-  | otherwise =
-    throwE $
-    case eitherDecode (getResponseBody res) of
-      Right e -> RequestErrorDetail (show req) (getResponseStatus res) e bod
-      Left msg ->
-        ErrorDecodingError (getResponseStatus res) msg $
-        L.unpack $ getResponseBody res
+parseResult req bod resIO =
+  ExceptT $ do
+    x <- try resIO
+    return $
+      case x of
+        Left e -> Left $ ErrHttp e
+        Right res
+          | isExpectedResponseStatus res req ->
+            Right $ AcmeResponse (getResponseHeaders res) (getResponseBody res)
+          | otherwise ->
+            Left $
+            case eitherDecode (getResponseBody res) of
+              Right e ->
+                RequestErrorDetail (show req) (getResponseStatus res) e bod
+              Left msg ->
+                ErrorDecodingError (getResponseStatus res) msg $
+                L.unpack $ getResponseBody res
   where
     isExpectedResponseStatus r expected =
       getResponseStatus r == acmeRequestExpectedStatus expected
