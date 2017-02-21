@@ -10,7 +10,7 @@ This module provides the necessary tweaks to the JOSE library.
   <https://tools.ietf.org/html/rfc7515#page-21 "Flattened JWS JSON Serialization Syntax">.
   See also the
   <https://github.com/letsencrypt/boulder/issues/2532 issue against boulder>. 
-  Therefore we provide 'toJSONflat'.
+  Therefore this module provides 'AcmeJws' that serializes to flattened jws.
 * ACME uses an currently unregisterd header parameter "nonce".
   The 'AcmeJwsHeader' supports the required header parameters.
 -}
