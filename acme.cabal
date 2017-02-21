@@ -6,7 +6,7 @@ version:             0.0.0.1
 synopsis:            ACME Library
 -- description:         
 homepage:            https://git.hemio.de/hemio/acme
-license:             LGPL-2.1
+license:             LGPL-3
 license-file:        LICENSE
 author:              Sophie Herold
 maintainer:          sophie@hemio.de
