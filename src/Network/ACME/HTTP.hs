@@ -1,7 +1,6 @@
 module Network.ACME.HTTP where
 
 import Control.Monad.Trans.Except
-import Crypto.JOSE
 import Data.Aeson
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L

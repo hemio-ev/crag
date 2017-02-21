@@ -24,16 +24,18 @@ acmePerformDirectory :: AcmeRequestDirectory
                      -> ExceptT RequestError IO AcmeObjDirectory
 acmePerformDirectory acmeReq =
   addDirectory <$> (acmeHttpGet acmeReq >>= resBody)
+    -- TODO: Boulder workaround
   where
     addDirectory x = x {acmeObjDirectory = Just acmeReq}
 
 -- ** Account
 -- | Registeres new account
-acmePerformNewAccount :: AcmeObjAccount
+acmePerformAccountNew :: AcmeObjAccount
                       -> AcmeObjDirectory
                       -> ExceptT RequestError IO AcmeObjAccount
-acmePerformNewAccount acc dir =
-  newJwsObj req acc acc dir >>= acmeHttpPost req >>= resBody
+acmePerformAccountNew acc dir = do
+  body <- acmeNewJwsBody req acc acc dir
+  acmeHttpPost req body >>= resBody
   where
     req = fromJust $ acmeObjDirectoryNewReg dir
 
@@ -42,11 +44,11 @@ acmePerformNewAccount acc dir =
 acmePerformAccountURI
   :: AcmeObjAccount
   -> AcmeObjDirectory
-  -> ExceptT RequestError IO AcmeRequestUpdateAccount
+  -> ExceptT RequestError IO AcmeRequestAccountUpdate
 acmePerformAccountURI acc dir = do
-  body <- newJwsObj req emptyObject acc dir
+  body <- acmeNewJwsBody req emptyObject acc dir
   res <- acmeHttpPost req body
-  AcmeRequestUpdateAccount <$> resHeaderAsURI "Location" res
+  AcmeRequestAccountUpdate <$> resHeaderAsURI "Location" res
   where
     req =
       AcmeRequestAccountURI $
@@ -54,12 +56,12 @@ acmePerformAccountURI acc dir = do
 
 -- TODO: Only supports bolder legacy
 -- | Update account
-acmePerformUpdateAccount :: AcmeObjAccount
+acmePerformAccountUpdate :: AcmeObjAccount
                          -> AcmeObjDirectory
                          -> ExceptT RequestError IO AcmeObjAccount
-acmePerformUpdateAccount acc dir = do
+acmePerformAccountUpdate acc dir = do
   req <- acmePerformAccountURI acc dir
-  body <- newJwsObj req acc acc dir
+  body <- acmeNewJwsBody req acc acc dir
   acmeHttpPost req body >>= resBody
 
 -- | Key Roll-over
@@ -75,61 +77,64 @@ acmePerformAccountKeyRollover current new dir =
       accUrl <- acmePerformAccountURI current dir
       let objRollover =
             AcmeObjAccountKeyRollover (jwkPublic $ acmeObjAccountKey new) accUrl
-      innerJws <- newJwsObj req objRollover new dir
-      outerJws <- newJwsObj req innerJws current dir
-      --error $ L.unpack $ encode outerJws
+      innerJws <- acmeNewJwsBody req objRollover new dir
+      outerJws <- acmeNewJwsBody req innerJws current dir
       acmeHttpPost req outerJws >>= resBody
 
 -- ** Authorization
 -- | New authorization
-acmePerformNewAuthz
-  :: AcmeObjNewAuthz
+acmePerformAuthorizationNew
+  :: AcmeObjAuthorizationNew
   -> AcmeObjAccount
   -> AcmeObjDirectory
   -> ExceptT RequestError IO AcmeObjAuthorization
-acmePerformNewAuthz authz acc dir =
+acmePerformAuthorizationNew authz acc dir =
   case acmeObjDirectoryNewAuthz dir of
     Nothing -> throwE (RequestNotSupported "new-authz")
-    Just req -> newJwsObj req authz acc dir >>= acmeHttpPost req >>= resBody
+    Just req -> do
+      body <- acmeNewJwsBody req authz acc dir
+      acmeHttpPost req body >>= resBody
 
 -- | Existing authorization
-acmePerformExistingAuthz
-  :: AcmeObjNewAuthz
+acmePerformAuthorizationExisting
+  :: AcmeObjAuthorizationNew
   -> AcmeObjAccount
   -> AcmeObjDirectory
   -> ExceptT RequestError IO AcmeObjAuthorization
-acmePerformExistingAuthz authz acc dir =
+acmePerformAuthorizationExisting authz acc dir =
   case acmeObjDirectoryNewAuthz dir of
     Nothing -> throwE (RequestNotSupported "new-authz")
-    Just req ->
-      newJwsObj (reqMod req) authzMod acc dir >>= acmeHttpPost req >>= resBody
+    Just req -> do
+      body <- acmeNewJwsBody (reqMod req) authzMod acc dir
+      acmeHttpPost req body >>= resBody
   where
     authzMod = authz {acmeObjNewAuthzExisting = Just "require"}
-    reqMod :: AcmeRequestNewAuthz -> AcmeRequestExistingAuthz
-    reqMod = AcmeRequestExistingAuthz . acmeRequestUrl
+    reqMod :: AcmeRequestAuthorziationNew -> AcmeRequestAuthorizationExisting
+    reqMod = AcmeRequestAuthorizationExisting . acmeRequestUrl
 
 -- | Respond to challenge
-acmePerformRespondChallenge
+acmePerformChallengeRespond
   :: AcmeRequestChallengeResponse
   -> AcmeObjChallengeResponse
   -> AcmeObjAccount
   -> AcmeObjDirectory
   -> ExceptT RequestError IO AcmeObjChallenge
-acmePerformRespondChallenge req ch acc dir =
-  newJwsObj req ch acc dir >>= acmeHttpPost req >>= resBody
+acmePerformChallengeRespond req ch acc dir = do
+  body <- acmeNewJwsBody req ch acc dir
+  acmeHttpPost req body >>= resBody
 
--- ** Certificates
+-- ** Certificate
 -- | Create new application (handing in a certificate request)
-acmePerformNewOrder
+acmePerformOrderNew
   :: AcmeObjOrder
   -> AcmeObjAccount
   -> AcmeObjDirectory
   -> ExceptT RequestError IO X509.SignedCertificate
-acmePerformNewOrder app acc dir =
+acmePerformOrderNew app acc dir =
   case guessedNewOrderRequest of
     Nothing -> throwE (RequestNotSupported "new-app")
     Just req -> do
-      reqBody <- newJwsObj req app acc dir
+      reqBody <- acmeNewJwsBody req app acc dir
       res <- acmeHttpPost req reqBody
       decodeCert $ acmeResponseBody res
   where
@@ -149,15 +154,38 @@ acmePerformNonce d =
   AcmeJwsNonce <$> (acmeHttpHead req >>= resHeader "Replay-Nonce")
   where
     req = guessNonceRequest d
-    -- Fallback to directory url, since Boulder does not implement /new-nonce/
-    guessNonceRequest :: AcmeObjDirectory -> AcmeRequestNewNonce
+    -- TODO: Fallback to directory url, since Boulder does not implement /new-nonce/
+    guessNonceRequest :: AcmeObjDirectory -> AcmeRequestNonceNew
     guessNonceRequest AcmeObjDirectory {..} =
       case acmeObjDirectoryNewNonce of
         Just x -> x
         Nothing ->
-          AcmeRequestNewNonce (acmeRequestUrl $ fromJust acmeObjDirectory)
+          AcmeRequestNonceNew (acmeRequestUrl $ fromJust acmeObjDirectory)
 
--- * Utils (maybe move elsewhere)
+-- * Utils
+-- ** Object generation
+acmeNewObjAccountStub :: String -> IO AcmeObjAccount
+acmeNewObjAccountStub mail = do
+  keyMat <- genKeyMaterial (RSAGenParam 256)
+  return
+    AcmeObjAccount
+    { acmeObjAccountKey = keyMat
+    , acmeObjAccountContact = Just ["mailto:" ++ mail]
+    , acmeObjAccountStatus = Nothing
+    , acmeObjAccountTermsOfServiceAgreed = Nothing
+    , acmeObjAccountOrders = Nothing
+    , acmeObjAccountAgreement = Nothing
+    }
+
+acmeNewObjOrder :: Base64Octets -> AcmeObjOrder
+acmeNewObjOrder xs =
+  AcmeObjOrder
+  { acmeObjOrderCsr = xs
+  , acmeObjOrderNot_Before = Nothing
+  , acmeObjOrderNot_After = Nothing
+  }
+
+-- ** Object inquiry 
 acmeGetPendingChallenge
   :: String -- ^ Type
   -> AcmeObjAuthorization
@@ -175,6 +203,7 @@ acmeMaybePendingChallenge t authz =
     cond x =
       acmeObjChallengeStatus x == "pending" && acmeObjChallengeType x == t
 
+-- ** Other
 acmeKeyAuthorization :: AcmeObjChallenge
                      -> AcmeObjAccount
                      -> ExceptT RequestError IO String
@@ -183,32 +212,18 @@ acmeKeyAuthorization ch acc =
     Nothing -> throwE $ AcmeErrNoToken ch
     Just token -> return $ token ++ "." ++ jwkThumbprint (acmeObjAccountKey acc)
 
-newAcmeObjAccountStub :: String -> IO AcmeObjAccount
-newAcmeObjAccountStub mail = do
-  keyMat <- genKeyMaterial (RSAGenParam 256)
-  return
-    AcmeObjAccount
-    { acmeObjAccountKey = keyMat
-    , acmeObjAccountContact = Just ["mailto:" ++ mail]
-    , acmeObjAccountStatus = Nothing
-    , acmeObjAccountTermsOfServiceAgreed = Nothing
-    , acmeObjAccountOrders = Nothing
-    , acmeObjAccountAgreement = Nothing
-    }
-
--- * Engine
 {-|
 Creates a signed JWS object in ACME format. This implies interaction with the
 ACME server for obtaining a valid nonce for this request.
 -}
-newJwsObj
+acmeNewJwsBody
   :: (AcmeRequest a, ToJSON o)
-  => a -- ^ Usually taken from the 'AcmeDirectory'
+  => a -- ^ For example from 'AcmeObjDirectory'
   -> o -- ^ Request body
-  -> AcmeObjAccount -- ^ Signing account
-  -> AcmeObjDirectory -- ^ The directory of the server
+  -> AcmeObjAccount -- ^ Account signing the request
+  -> AcmeObjDirectory -- ^ Directory of the server
   -> ExceptT RequestError IO (AcmeJws)
-newJwsObj req obj acc dir = do
+acmeNewJwsBody req obj acc dir = do
   nonce <- acmePerformNonce dir
   RequestJwsError `withExceptT`
     (AcmeJws <$>

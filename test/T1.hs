@@ -23,34 +23,35 @@ testAccToCert =
     let domain = "hemev-test-2.xyz" :: String
     step "acmePerformDirectory"
     directory <- assertExceptT $ acmePerformDirectory confUrl
-    accStub <- newAcmeObjAccountStub "email@example.org"
+    accStub <- acmeNewObjAccountStub "email@example.org"
     let acc =
           accStub
           {acmeObjAccountAgreement = parseURI "http://boulder:4000/terms/v1"}
-    step "acmePerformNewAccount"
-    _ <- assertExceptT $ acmePerformNewAccount acc directory
-    step "acmePerformNewAuthz"
+    step "acmePerformAccountNew"
+    _ <- assertExceptT $ acmePerformAccountNew acc directory
+    step "acmePerformAuthorizationNew"
     authz <-
-      assertExceptT $ acmePerformNewAuthz (acmeNewDnsAuthz domain) acc directory
+      assertExceptT $
+      acmePerformAuthorizationNew (acmeNewDnsAuthz domain) acc directory
     challenge <- assertExceptT $ acmeGetPendingChallenge "dns-01" authz
     acmeObjChallengeType challenge @?= "dns-01"
     respHash <- assertExceptT $ acmeKeyAuthorization challenge acc
     step "setDnsTxt"
     _ <- setDnsTxt domain (sha256 respHash)
-    step "acmePerformRespondChallenge"
+    step "acmePerformChallengeRespond"
     x <-
       assertExceptT $
       let response = AcmeObjChallengeResponse respHash
           req = acmeObjChallengeUri challenge
-      in acmePerformRespondChallenge req response acc directory
+      in acmePerformChallengeRespond req response acc directory
     isJust (acmeObjChallengeKey_Authorization x) @?
       "keyAuthorization not accepted"
     step "(delay)"
     threadDelay (1 * 1000000)
     csr <- newCrt domain
-    step "acmePerformNewOrder"
-    let cert = newAcmeObjOrder (Base64Octets csr)
-    crt <- assertExceptT $ acmePerformNewOrder cert acc directory
+    step "acmePerformOrderNew"
+    let cert = acmeNewObjOrder (Base64Octets csr)
+    crt <- assertExceptT $ acmePerformOrderNew cert acc directory
     extensionGet (certExtensions $ getCertificate crt) @?=
       Just (ExtSubjectAltName [AltNameDNS domain])
 
@@ -59,26 +60,26 @@ testAccount =
   testCaseSteps "Account operations" $ \step -> do
     step "acmePerformDirectory"
     directory <- assertExceptT $ acmePerformDirectory confUrl
-    step "acmePerformNewAccount"
-    acc <- newAcmeObjAccountStub email1
-    accReturned <- assertExceptT $ acmePerformNewAccount acc directory
+    step "acmePerformAccountNew"
+    acc <- acmeNewObjAccountStub email1
+    accReturned <- assertExceptT $ acmePerformAccountNew acc directory
     acmeObjAccountContact accReturned @?= acmeObjAccountContact acc
     step "acmePerformAccountURI"
     _ <- assertExceptT $ acmePerformAccountURI acc directory
     -- Update account
-    step "acmePerformUpdateAccount (contact)"
+    step "acmePerformAccountUpdate (contact)"
     let acc' = acc {acmeObjAccountContact = Just ["mailto:" ++ email2]}
-    accReturned' <- assertExceptT $ acmePerformUpdateAccount acc' directory
+    accReturned' <- assertExceptT $ acmePerformAccountUpdate acc' directory
     acmeObjAccountContact accReturned' @?= acmeObjAccountContact acc'
     step "acmePerformAccountKeyRollover"
-    accNew <- newAcmeObjAccountStub email1
+    accNew <- acmeNewObjAccountStub email1
     _ <- assertExceptT $ acmePerformAccountKeyRollover acc accNew directory
-    --step "acmePerformUpdateAccount (status=deactivated)"
+    --step "acmePerformAccountUpdate (status=deactivated)"
     --let acc'' = acc' {acmeObjAccountStatus = Just "deactivated"}
-    --accReturned'' <- assertExceptT $ acmePerformUpdateAccount acc'' directory
+    --accReturned'' <- assertExceptT $ acmePerformAccountUpdate acc'' directory
     --acmeObjAccountStatus accReturned'' @?= Just "deactivated"
     --this should fail
-    --_ <- assertExceptT $ acmePerformUpdateAccount acc directory
+    --_ <- assertExceptT $ acmePerformAccountUpdate acc directory
     --TODO: ASSERT FOR FAIL
     return ()
   where

@@ -17,16 +17,16 @@ In order to help clients configure themselves with the right URIs for
 each ACME operation, ACME servers provide a directory object.
 -}
 data AcmeObjDirectory = AcmeObjDirectory
-  { acmeObjDirectory :: Maybe AcmeRequestDirectory
-  , acmeObjDirectoryNewNonce :: Maybe AcmeRequestNewNonce
-  , acmeObjDirectoryNewAccount :: Maybe AcmeRequestNewAccount
-  , acmeObjDirectoryNewOrder :: Maybe AcmeRequestNewOrder
-  , acmeObjDirectoryNewAuthz :: Maybe AcmeRequestNewAuthz
+  { acmeObjDirectory :: Maybe AcmeRequestDirectory -- ^ Boulder workaround (new-nonce)
+  , acmeObjDirectoryNewNonce :: Maybe AcmeRequestNonceNew
+  , acmeObjDirectoryNewAccount :: Maybe AcmeRequestAccountNew
+  , acmeObjDirectoryNewOrder :: Maybe AcmeRequestOrderNew
+  , acmeObjDirectoryNewAuthz :: Maybe AcmeRequestAuthorziationNew
   , acmeObjDirectoryRevokeCert :: Maybe URI -- ^ Revoke certificate
   , acmeObjDirectoryKeyChange :: Maybe AcmeRequestAccountKeyRollover
   , acmeObjDirectoryMeta :: Maybe AcmeDirectoryMeta
-  , acmeObjDirectoryNewCert :: Maybe AcmeRequestNewOrder -- ^ Boulder legacy
-  , acmeObjDirectoryNewReg :: Maybe AcmeRequestNewAccount -- ^ Boulder legacy
+  , acmeObjDirectoryNewCert :: Maybe AcmeRequestOrderNew -- ^ Boulder legacy
+  , acmeObjDirectoryNewReg :: Maybe AcmeRequestAccountNew -- ^ Boulder legacy
   } deriving (Show, Generic)
 
 instance FromJSON AcmeObjDirectory where
@@ -74,14 +74,14 @@ instance ToJSON AcmeObjAccount where
 
 -- ** New Account
 -- | New account
-newtype AcmeRequestNewAccount =
-  AcmeRequestNewAccount URI
+newtype AcmeRequestAccountNew =
+  AcmeRequestAccountNew URI
   deriving (Show, Generic)
 
-instance FromJSON AcmeRequestNewAccount
+instance FromJSON AcmeRequestAccountNew
 
-instance AcmeRequest AcmeRequestNewAccount where
-  acmeRequestUrl (AcmeRequestNewAccount u) = u
+instance AcmeRequest AcmeRequestAccountNew where
+  acmeRequestUrl (AcmeRequestAccountNew u) = u
   acmeRequestExpectedStatus = const created201
 
 -- ** Retrive URI
@@ -94,20 +94,20 @@ instance AcmeRequest AcmeRequestAccountURI where
   acmeRequestExpectedStatus = const conflict409
 
 -- ** Update
-newtype AcmeRequestUpdateAccount =
-  AcmeRequestUpdateAccount URI
+newtype AcmeRequestAccountUpdate =
+  AcmeRequestAccountUpdate URI
   deriving (Show, Generic)
 
-instance ToJSON AcmeRequestUpdateAccount
+instance ToJSON AcmeRequestAccountUpdate
 
-instance AcmeRequest AcmeRequestUpdateAccount where
-  acmeRequestUrl (AcmeRequestUpdateAccount u) = u
+instance AcmeRequest AcmeRequestAccountUpdate where
+  acmeRequestUrl (AcmeRequestAccountUpdate u) = u
   acmeRequestExpectedStatus = const accepted202
 
 -- ** Key Rollover
 data AcmeObjAccountKeyRollover = AcmeObjAccountKeyRollover
   { acmeObjAccountKeyRolloverNew_Key :: KeyMaterial
-  , acmeObjAccountKeyRolloverAccount :: AcmeRequestUpdateAccount
+  , acmeObjAccountKeyRolloverAccount :: AcmeRequestAccountUpdate
   } deriving (Show, Generic)
 
 instance ToJSON AcmeObjAccountKeyRollover where
@@ -150,17 +150,17 @@ instance ToJSON AcmeObjIdentifier where
 
 -- ** New Authorizations
 -- | New authorization
-data AcmeObjNewAuthz = AcmeObjNewAuthz
+data AcmeObjAuthorizationNew = AcmeObjAuthorizationNew
   { acmeObjNewAuthzIdentifier :: AcmeObjIdentifier
   , acmeObjNewAuthzExisting :: Maybe String
   } deriving (Show, Generic)
 
-instance ToJSON AcmeObjNewAuthz where
+instance ToJSON AcmeObjAuthorizationNew where
   toJSON = toAcmeRequestBody "acmeObjNewAuthz"
 
-acmeNewDnsAuthz :: HostName -> AcmeObjNewAuthz
+acmeNewDnsAuthz :: HostName -> AcmeObjAuthorizationNew
 acmeNewDnsAuthz domain =
-  AcmeObjNewAuthz
+  AcmeObjAuthorizationNew
   { acmeObjNewAuthzIdentifier =
       AcmeObjIdentifier
       {acmeObjIdentifierType = "dns", acmeObjIdentifierValue = domain}
@@ -168,24 +168,24 @@ acmeNewDnsAuthz domain =
   }
 
 -- | Create new authorization if none exists
-newtype AcmeRequestNewAuthz =
-  AcmeRequestNewAuthz URI
+newtype AcmeRequestAuthorziationNew =
+  AcmeRequestAuthorziationNew URI
   deriving (Show, Generic)
 
-instance FromJSON AcmeRequestNewAuthz
+instance FromJSON AcmeRequestAuthorziationNew
 
-instance AcmeRequest AcmeRequestNewAuthz where
-  acmeRequestUrl (AcmeRequestNewAuthz u) = u
+instance AcmeRequest AcmeRequestAuthorziationNew where
+  acmeRequestUrl (AcmeRequestAuthorziationNew u) = u
   acmeRequestExpectedStatus = const created201
 
 -- Existing Authorizations
 -- | Get existing authorizations
-newtype AcmeRequestExistingAuthz =
-  AcmeRequestExistingAuthz URI
+newtype AcmeRequestAuthorizationExisting =
+  AcmeRequestAuthorizationExisting URI
   deriving (Show, Generic)
 
-instance AcmeRequest AcmeRequestExistingAuthz where
-  acmeRequestUrl (AcmeRequestExistingAuthz u) = u
+instance AcmeRequest AcmeRequestAuthorizationExisting where
+  acmeRequestUrl (AcmeRequestAuthorizationExisting u) = u
   acmeRequestExpectedStatus = const seeOther303
 
 -- * ACME Challenges
@@ -222,7 +222,7 @@ instance FromJSON AcmeRequestChallengeResponse
 instance AcmeRequest AcmeRequestChallengeResponse where
   acmeRequestUrl (AcmeRequestChallengeResponse u) = u
   -- Boulder legacy: should be 200
-  acmeRequestExpectedStatus = const status202
+  acmeRequestExpectedStatus = const accepted202
 
 -- * ACME Nonce
 -- | Nonce
@@ -232,14 +232,14 @@ newtype AcmeJwsNonce =
 
 instance ToJSON AcmeJwsNonce
 
-newtype AcmeRequestNewNonce =
-  AcmeRequestNewNonce URI
+newtype AcmeRequestNonceNew =
+  AcmeRequestNonceNew URI
   deriving (Show, Generic)
 
-instance FromJSON AcmeRequestNewNonce
+instance FromJSON AcmeRequestNonceNew
 
-instance AcmeRequest AcmeRequestNewNonce where
-  acmeRequestUrl (AcmeRequestNewNonce u) = u
+instance AcmeRequest AcmeRequestNonceNew where
+  acmeRequestUrl (AcmeRequestNonceNew u) = u
   acmeRequestExpectedStatus = const ok200
 
 -- * ACME Application
@@ -254,23 +254,15 @@ data AcmeObjOrder = AcmeObjOrder
 instance ToJSON AcmeObjOrder where
   toJSON = toAcmeRequestBody "acmeObjOrder"
 
-newAcmeObjOrder :: Base64Octets -> AcmeObjOrder
-newAcmeObjOrder xs =
-  AcmeObjOrder
-  { acmeObjOrderCsr = xs
-  , acmeObjOrderNot_Before = Nothing
-  , acmeObjOrderNot_After = Nothing
-  }
-
 -- | New application
-newtype AcmeRequestNewOrder =
-  AcmeRequestNewOrder URI
+newtype AcmeRequestOrderNew =
+  AcmeRequestOrderNew URI
   deriving (Show, Generic)
 
-instance FromJSON AcmeRequestNewOrder
+instance FromJSON AcmeRequestOrderNew
 
-instance AcmeRequest AcmeRequestNewOrder where
-  acmeRequestUrl (AcmeRequestNewOrder u) = u
+instance AcmeRequest AcmeRequestOrderNew where
+  acmeRequestUrl (AcmeRequestOrderNew u) = u
   acmeRequestExpectedStatus = const created201
 
 -- * Misc
