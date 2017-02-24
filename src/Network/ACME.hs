@@ -21,7 +21,7 @@ import Network.ACME.Types as X
 -- ** Directory
 -- | Get all supported resources from server
 acmePerformDirectory :: AcmeRequestDirectory
-                     -> ExceptT RequestError IO AcmeObjDirectory
+                     -> ExceptT AcmeErr IO AcmeObjDirectory
 acmePerformDirectory acmeReq =
   addDirectory <$> (acmeHttpGet acmeReq >>= resBody)
     -- TODO: Boulder workaround
@@ -32,10 +32,10 @@ acmePerformDirectory acmeReq =
 -- | Registeres new account
 acmePerformAccountNew :: AcmeObjAccount
                       -> AcmeObjDirectory
-                      -> ExceptT RequestError IO AcmeObjAccount
+                      -> ExceptT AcmeErr IO AcmeObjAccount
 acmePerformAccountNew acc dir =
   case acmeObjDirectoryNewReg dir of
-    req@Nothing -> throwRequestNotSupported req
+    req@Nothing -> throwAcmeErrRequestNotSupported req
     Just req -> do
       body <- acmeNewJwsBody req acc acc dir
       acmeHttpPost req body >>= resBody
@@ -45,7 +45,7 @@ acmePerformAccountNew acc dir =
 acmePerformAccountURI
   :: AcmeObjAccount
   -> AcmeObjDirectory
-  -> ExceptT RequestError IO AcmeRequestAccountUpdate
+  -> ExceptT AcmeErr IO AcmeRequestAccountUpdate
 acmePerformAccountURI acc dir = do
   body <- acmeNewJwsBody req emptyObject acc dir
   res <- acmeHttpPost req body
@@ -59,7 +59,7 @@ acmePerformAccountURI acc dir = do
 -- | Update account
 acmePerformAccountUpdate :: AcmeObjAccount
                          -> AcmeObjDirectory
-                         -> ExceptT RequestError IO AcmeObjAccount
+                         -> ExceptT AcmeErr IO AcmeObjAccount
 acmePerformAccountUpdate acc dir = do
   req <- acmePerformAccountURI acc dir
   body <- acmeNewJwsBody req acc acc dir
@@ -70,10 +70,10 @@ acmePerformAccountKeyRollover
   :: AcmeObjAccount -- ^ Account with current key
   -> AcmeObjAccount -- ^ Same account with new key
   -> AcmeObjDirectory
-  -> ExceptT RequestError IO AcmeObjAccount
+  -> ExceptT AcmeErr IO AcmeObjAccount
 acmePerformAccountKeyRollover current new dir =
   case acmeObjDirectoryKeyChange dir of
-    req@Nothing -> throwRequestNotSupported req
+    req@Nothing -> throwAcmeErrRequestNotSupported req
     Just req -> do
       accUrl <- acmePerformAccountURI current dir
       let objRollover =
@@ -88,10 +88,10 @@ acmePerformAuthorizationNew
   :: AcmeObjAuthorizationNew
   -> AcmeObjAccount
   -> AcmeObjDirectory
-  -> ExceptT RequestError IO AcmeObjAuthorization
+  -> ExceptT AcmeErr IO AcmeObjAuthorization
 acmePerformAuthorizationNew authz acc dir =
   case acmeObjDirectoryNewAuthz dir of
-    req@Nothing -> throwRequestNotSupported req
+    req@Nothing -> throwAcmeErrRequestNotSupported req
     Just req -> do
       body <- acmeNewJwsBody req authz acc dir
       acmeHttpPost req body >>= resBody
@@ -101,10 +101,10 @@ acmePerformAuthorizationExisting
   :: AcmeObjAuthorizationNew
   -> AcmeObjAccount
   -> AcmeObjDirectory
-  -> ExceptT RequestError IO AcmeObjAuthorization
+  -> ExceptT AcmeErr IO AcmeObjAuthorization
 acmePerformAuthorizationExisting authz acc dir =
   case acmeObjDirectoryNewAuthz dir of
-    req@Nothing -> throwRequestNotSupported req
+    req@Nothing -> throwAcmeErrRequestNotSupported req
     Just req -> do
       body <- acmeNewJwsBody (reqMod req) authzMod acc dir
       acmeHttpPost req body >>= resBody
@@ -119,7 +119,7 @@ acmePerformChallengeRespond
   -> AcmeObjChallengeResponse
   -> AcmeObjAccount
   -> AcmeObjDirectory
-  -> ExceptT RequestError IO AcmeObjChallenge
+  -> ExceptT AcmeErr IO AcmeObjChallenge
 acmePerformChallengeRespond req ch acc dir = do
   body <- acmeNewJwsBody req ch acc dir
   acmeHttpPost req body >>= resBody
@@ -130,10 +130,10 @@ acmePerformOrderNew
   :: AcmeObjOrder
   -> AcmeObjAccount
   -> AcmeObjDirectory
-  -> ExceptT RequestError IO X509.SignedCertificate
+  -> ExceptT AcmeErr IO X509.SignedCertificate
 acmePerformOrderNew app acc dir =
   case guessedNewOrderRequest of
-    req@Nothing -> throwRequestNotSupported req
+    req@Nothing -> throwAcmeErrRequestNotSupported req
     Just req -> do
       body <- acmeNewJwsBody req app acc dir
       res <- acmeHttpPost req body
@@ -146,17 +146,17 @@ acmePerformOrderNew app acc dir =
     decodeCert b =
       case X509.decodeSignedCertificate (L.toStrict b) of
         Right c -> return c
-        Left e -> throwE (ErrDecodeX509 e (show b))
+        Left e -> throwE (AcmeErrDecodingX509 e (show b))
 
 -- | Revoke
 acmePerformCertificateRevoke
   :: AcmeObjCertificateRevoke
   -> AcmeObjAccount
   -> AcmeObjDirectory
-  -> ExceptT RequestError IO ()
+  -> ExceptT AcmeErr IO ()
 acmePerformCertificateRevoke obj acc dir =
   case acmeObjDirectoryRevokeCert dir of
-    req@Nothing -> throwRequestNotSupported req
+    req@Nothing -> throwAcmeErrRequestNotSupported req
     Just req -> do
       body <- acmeNewJwsBody req obj acc dir
       _ <- acmeHttpPost req body
@@ -164,7 +164,7 @@ acmePerformCertificateRevoke obj acc dir =
 
 -- ** Nonce
 -- | Get new nonce
-acmePerformNonce :: AcmeObjDirectory -> ExceptT RequestError IO AcmeJwsNonce
+acmePerformNonce :: AcmeObjDirectory -> ExceptT AcmeErr IO AcmeJwsNonce
 acmePerformNonce d =
   AcmeJwsNonce <$> (acmeHttpHead req >>= resHeader "Replay-Nonce")
   where
@@ -213,7 +213,7 @@ acmeNewObjCertificateRevoke crt =
 acmeGetPendingChallenge
   :: String -- ^ Type
   -> AcmeObjAuthorization
-  -> ExceptT RequestError IO AcmeObjChallenge
+  -> ExceptT AcmeErr IO AcmeObjChallenge
 acmeGetPendingChallenge t =
   maybeToExceptT (AcmeErrNoChallenge t) . acmeMaybePendingChallenge t
 
@@ -230,7 +230,7 @@ acmeMaybePendingChallenge t authz =
 -- ** Other
 acmeKeyAuthorization :: AcmeObjChallenge
                      -> AcmeObjAccount
-                     -> ExceptT RequestError IO String
+                     -> ExceptT AcmeErr IO String
 acmeKeyAuthorization ch acc =
   case acmeObjChallengeToken ch of
     Nothing -> throwE $ AcmeErrNoToken ch
@@ -246,9 +246,9 @@ acmeNewJwsBody
   -> o -- ^ Request body
   -> AcmeObjAccount -- ^ Account signing the request
   -> AcmeObjDirectory -- ^ Directory of the server
-  -> ExceptT RequestError IO (AcmeJws)
+  -> ExceptT AcmeErr IO (AcmeJws)
 acmeNewJwsBody req obj acc dir = do
   nonce <- acmePerformNonce dir
-  RequestJwsError `withExceptT`
+  AcmeErrJws `withExceptT`
     (AcmeJws <$>
      jwsSigned obj (acmeRequestUrl req) (acmeObjAccountKey acc) nonce)

@@ -22,26 +22,30 @@ data AcmeResponse = AcmeResponse
 
 type Headers = [(HeaderName, B.ByteString)]
 
-resHeader :: HeaderName -> AcmeResponse -> ExceptT RequestError IO String
+resHeader :: HeaderName -> AcmeResponse -> ExceptT AcmeErr IO String
 resHeader x (AcmeResponse h _) =
   case find (\(n, _) -> n == x) h of
     Just (_, v) -> return $ B.unpack v
-    Nothing -> throwE $ HeaderNotFound x
+    Nothing -> throwE $ AcmeErrHeaderNotFound x
 
-resHeaderAsURI :: HeaderName -> AcmeResponse -> ExceptT RequestError IO URI
+resHeaderAsURI :: HeaderName -> AcmeResponse -> ExceptT AcmeErr IO URI
 resHeaderAsURI x ys = do
   h <- resHeader x ys
   case parseURI h of
     Just u -> return u
-    Nothing -> throwE $ ResponseHeaderDecodeError (show x) h
+    Nothing ->
+      throwE $
+      AcmeErrDecodingHeader {acmeErrHeaderName = show x, acmeErrHeaderValue = h}
 
 resBody
   :: FromJSON a
-  => AcmeResponse -> ExceptT RequestError IO a
+  => AcmeResponse -> ExceptT AcmeErr IO a
 resBody res =
   case eitherDecode (acmeResponseBody res) of
     Right x -> return x
-    Left msg -> throwE $ DecodingError msg (show res)
+    Left msg ->
+      throwE $
+      AcmeErrDecodingBody {acmeErrMessage = msg, acmeErrBody = show res}
 
 -- ** Perform ACME Server Request
 -- | Perform POST query
@@ -49,7 +53,7 @@ acmeHttpPost
   :: AcmeRequest a
   => a -- ^ Request
   -> AcmeJws
-  -> ExceptT RequestError IO AcmeResponse
+  -> ExceptT AcmeErr IO AcmeResponse
 acmeHttpPost req bod =
   parseResult req (Just bod') $
   httpLBS (setRequestBodyLBS bod' $ newHttpRequest POST req)
@@ -60,14 +64,14 @@ acmeHttpPost req bod =
 acmeHttpGet
   :: (AcmeRequest a)
   => a -- ^ Request
-  -> ExceptT RequestError IO AcmeResponse
+  -> ExceptT AcmeErr IO AcmeResponse
 acmeHttpGet req = parseResult req Nothing $ httpLBS (newHttpRequest GET req)
 
 -- | Perform HEAD query
 acmeHttpHead
   :: (AcmeRequest a)
   => a -- ^ Request
-  -> ExceptT RequestError IO AcmeResponse
+  -> ExceptT AcmeErr IO AcmeResponse
 acmeHttpHead req = parseResult req Nothing $ httpLBS (newHttpRequest HEAD req)
 
 -- | Transforms abstract ACME to concrete HTTP request
@@ -87,13 +91,13 @@ parseResult
   => a
   -> Maybe L.ByteString -- ^ Body
   -> IO (Response L.ByteString)
-  -> ExceptT RequestError IO AcmeResponse
+  -> ExceptT AcmeErr IO AcmeResponse
 parseResult req bod resIO =
   ExceptT $ do
     x <- try resIO
     return $
       case x of
-        Left e -> Left $ ErrHttp e
+        Left e -> Left $ AcmeErrHttp e
         Right res
           | isExpectedResponseStatus res req ->
             Right $ AcmeResponse (getResponseHeaders res) (getResponseBody res)
@@ -101,10 +105,18 @@ parseResult req bod resIO =
             Left $
             case eitherDecode (getResponseBody res) of
               Right e ->
-                RequestErrorDetail (show req) (getResponseStatus res) e bod
+                AcmeErrDetail
+                { acmeErrRequest = (show req)
+                , acmeErrHttpStatus = (getResponseStatus res)
+                , acmeErrProblemDetail = e
+                , acmeErrRequestBody = bod
+                }
               Left msg ->
-                ErrorDecodingError (getResponseStatus res) msg $
-                L.unpack $ getResponseBody res
+                AcmeErrDecodingProblemDetail
+                { acmeErrHttpStatus = getResponseStatus res
+                , acmeErrMessage = msg
+                , acmeErrResponseBody = L.unpack $ getResponseBody res
+                }
   where
     isExpectedResponseStatus r expected =
       getResponseStatus r == acmeRequestExpectedStatus expected

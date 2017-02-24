@@ -123,11 +123,11 @@ setDnsTxt hostName rdata = do
       object
         ["host" .= ("_acme-challenge." ++ hostName ++ "."), "value" .= rdata]
 
-assertExceptT :: ExceptT RequestError IO a -> IO a
+assertExceptT :: ExceptT AcmeErr IO a -> IO a
 assertExceptT y =
   runExceptT y >>= \x ->
     case x of
       Right d -> return d
       Left e -> do
-        assertFailure (showRequestError e)
+        assertFailure (showAcmeErr e)
         undefined
