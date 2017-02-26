@@ -81,3 +81,7 @@ showAcmeErr x = show x
 
 showStatus :: Status -> String
 showStatus Status {..} = show statusCode ++ " " ++ B.unpack statusMessage
+
+acmeErrD :: AcmeErr -> Maybe ProblemDetail
+acmeErrD AcmeErrDetail {..} = Just acmeErrProblemDetail
+acmeErrD _ = Nothing

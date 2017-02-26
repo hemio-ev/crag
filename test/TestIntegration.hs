@@ -1,4 +1,6 @@
-module T1 where
+module TestIntegration
+  ( integrationTests
+  ) where
 
 import Control.Concurrent
 import Control.Monad.Trans.Except
@@ -16,6 +18,24 @@ import Network.HTTP.Types
 import Network.URI
 import Test.Tasty
 import Test.Tasty.HUnit
+
+integrationTests :: TestTree
+integrationTests =
+  testGroup "Network.ACME" [testFail, testAccount, testAccToCert]
+
+testFail :: TestTree
+testFail =
+  testCase "Handle error" $ do
+    directory <- assertExceptT $ acmePerformDirectory confUrl
+    accStub <- acmeNewObjAccountStub "email@example.org"
+    let acc =
+          accStub
+          {acmeObjAccountAgreement = parseURI "http://boulder:4000/terms/v1"}
+    _ <- assertExceptT $ acmePerformAccountNew acc directory
+    csr <- newCrt "example.org"
+    let cert = acmeNewObjOrder (Base64Octets csr)
+    Left e <- runExceptT $ acmePerformOrderNew cert acc directory
+    (acmeErrD e >>= problemDetailType) @?= parseURI "urn:acme:error:malformed"
 
 testAccToCert :: TestTree
 testAccToCert =
@@ -54,6 +74,7 @@ testAccToCert =
     crt <- assertExceptT $ acmePerformOrderNew cert acc directory
     extensionGet (certExtensions $ getCertificate crt) @?=
       Just (ExtSubjectAltName [AltNameDNS domain])
+    step "acmePerformCertificateRevoke"
     let revoke = acmeNewObjCertificateRevoke crt
     _ <- assertExceptT $ acmePerformCertificateRevoke revoke acc directory
     return ()
