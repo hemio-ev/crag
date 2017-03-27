@@ -13,7 +13,7 @@ configure-coverage:
 	cabal configure --enable-tests --enable-coverage
 
 test:
-	cabal test --show-details=always --test-option=--color=always
+	cabal test --show-details=direct --test-option=--color=always
 
 format-code: $(HS)
 
