@@ -1,6 +1,6 @@
 module Network.ACME.Types where
 
-import Crypto.JOSE (KeyMaterial)
+import Crypto.JOSE (JWK)
 import Crypto.JOSE.Types (Base64Octets)
 import Data.Aeson
 import Data.Time
@@ -59,7 +59,7 @@ instance AcmeRequest AcmeRequestDirectory where
 -- * ACME Accounts
 -- | ACME account
 data AcmeObjAccount = AcmeObjAccount
-  { acmeObjAccountKey :: KeyMaterial
+  { acmeObjAccountKey :: JWK
   , acmeObjAccountContact :: Maybe [String]
   , acmeObjAccountStatus :: Maybe String
   , acmeObjAccountTermsOfServiceAgreed :: Maybe Bool
@@ -107,7 +107,7 @@ instance AcmeRequest AcmeRequestAccountUpdate where
 
 -- ** Key Rollover
 data AcmeObjAccountKeyRollover = AcmeObjAccountKeyRollover
-  { acmeObjAccountKeyRolloverNew_Key :: KeyMaterial
+  { acmeObjAccountKeyRolloverNew_Key :: JWK
   , acmeObjAccountKeyRolloverAccount :: AcmeRequestAccountUpdate
   } deriving (Show, Generic)
 

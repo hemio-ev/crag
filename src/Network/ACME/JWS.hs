@@ -16,36 +16,23 @@ This module provides the necessary tweaks to the JOSE library.
 -}
 module Network.ACME.JWS
   ( module Network.ACME.JWS
-  , KeyMaterial
+  , JWK
   , Base64Octets(..)
   ) where
 
-import Control.Lens (preview, makeLenses, (&), (?~), at)
-import Control.Lens.Operators ((^?!))
+import Control.Lens (view, review, set, makeLenses, (&), (?~), at)
 import Control.Monad.Trans.Except
-import Crypto.Hash.SHA256 (hash)
 import Crypto.JOSE
 import Crypto.JOSE.Types (Base64Octets(..))
 import Data.Aeson
-import Data.Aeson.Encoding
 import Data.Aeson.Lens
-import qualified Data.ByteString.Base64.URL as Base64
 import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Lazy (toStrict)
-import qualified Data.ByteString.Lazy.Char8 as L
-import Data.Maybe (fromJust)
-import Data.Monoid ((<>))
 import Network.URI (URI, pathSegments)
 
 import Network.ACME.Types (AcmeJwsNonce)
 
-data AcmeJws =
-  AcmeJws (JWS AcmeJwsHeader)
-
--- | Generates JWS with /Flattened JWS JSON Serialization Syntax/
-instance ToJSON AcmeJws where
-  toJSON (AcmeJws (JWS p [s])) = toJSON s & _Object . at "payload" ?~ toJSON p
-  toJSON _ = undefined
+type AcmeJws = JWS AcmeJwsHeader
 
 -- | Enhanced 'JWSHeader' with additional header parameters
 data AcmeJwsHeader = AcmeJwsHeader
@@ -68,15 +55,14 @@ newAcmeJwsHeader
   :: JWK -- ^ Same key as used for signing. It's okay to include the private key.
   -> AcmeJwsNonce -- ^ Nonce
   -> AcmeJwsHeader
-newAcmeJwsHeader jwk nonce =
+newAcmeJwsHeader jwk' nonce =
   AcmeJwsHeader {_jwsStandardHeader = header', _jwsAcmeHeaderNonce = nonce}
   where
     header' =
-      (newJWSHeader (Unprotected, alg))
-      {_jwsHeaderJwk = Just $ HeaderParam Unprotected (jwkPublic jwk)}
-    alg :: Alg
-    alg =
-      case bestJWSAlg jwk of
+      set jwk (HeaderParam Unprotected <$> jwkPublic jwk') (newJWSHeader (Unprotected, alg'))
+    alg' :: Alg
+    alg' =
+      case bestJWSAlg jwk' of
         Left e -> error (show (e :: Error))
         -- Boulder sais
         -- 'detail: signature type 'PS512' in JWS header is not supported'
@@ -86,14 +72,14 @@ newAcmeJwsHeader jwk nonce =
 -- | Removes private key
 jwkPublic
   :: AsPublicKey a
-  => a -> a
-jwkPublic jwk = fromJust $ preview asPublicKey jwk
+  => a -> Maybe a
+jwkPublic jwk' = view asPublicKey jwk'
 
 jwsSigned
   :: (ToJSON a)
   => a
   -> URI
-  -> KeyMaterial
+  -> JWK
   -> AcmeJwsNonce
   -> ExceptT Error IO (JWS AcmeJwsHeader)
 jwsSigned payload url = signWith (newJWS $ toStrict $ encode payload')
@@ -103,25 +89,17 @@ jwsSigned payload url = signWith (newJWS $ toStrict $ encode payload')
 
 signWith
   :: JWS AcmeJwsHeader
-  -> KeyMaterial
+  -> JWK
   -> AcmeJwsNonce
   -> ExceptT Error IO (JWS AcmeJwsHeader)
-signWith jwsContent keyMat nonce = signJWS jwsContent header' jwk
+signWith jwsContent jwk' nonce = signJWS jwsContent header' jwk'
   where
-    header' = newAcmeJwsHeader jwk nonce
-    jwk = fromKeyMaterial keyMat
+    header' = newAcmeJwsHeader jwk' nonce
 
 -- | JSON Web Key (JWK) Thumbprint
 -- <https://tools.ietf.org/html/rfc7638 RFC 7638>
-jwkThumbprint :: KeyMaterial -> String
-jwkThumbprint = sha256 . L.unpack . encodingToLazyByteString . pairs . toEnc
-  where
-    toEnc (ECKeyMaterial ECKeyParameters {..}) =
-      "crv" .= ecCrv <> "kty" .= ecKty <> "x" .= ecX <> "y" .= ecY
-    toEnc (RSAKeyMaterial keyParam) =
-      "e" .= (keyParam ^?! rsaE) <> "kty" .= (keyParam ^?! rsaKty) <> "n" .=
-      (keyParam ^?! rsaN)
-    toEnc (OctKeyMaterial OctKeyParameters {..}) = undefined
+jwkThumbprint :: JWK -> String
+jwkThumbprint x = B.unpack $ review (base64url . digest) (view thumbprint x :: Digest SHA256)
 
 sha256 :: String -> String
-sha256 x = filter (/= '=') $ B.unpack $ Base64.encode (hash $ B.pack x)
+sha256 x = B.unpack $ review (base64url . digest) (hash (B.pack x) :: Digest SHA256)

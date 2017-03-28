@@ -77,7 +77,7 @@ acmePerformAccountKeyRollover current new dir =
     Just req -> do
       accUrl <- acmePerformAccountURI current dir
       let objRollover =
-            AcmeObjAccountKeyRollover (jwkPublic $ acmeObjAccountKey new) accUrl
+            AcmeObjAccountKeyRollover (fromJust $ jwkPublic $ acmeObjAccountKey new) accUrl
       innerJws <- acmeNewJwsBody req objRollover new dir
       outerJws <- acmeNewJwsBody req innerJws current dir
       acmeHttpPost req outerJws >>= resBody
@@ -181,7 +181,7 @@ acmePerformNonce d =
 -- ** Object generation
 acmeNewObjAccountStub :: String -> IO AcmeObjAccount
 acmeNewObjAccountStub mail = do
-  keyMat <- genKeyMaterial (RSAGenParam 256)
+  keyMat <- genJWK (RSAGenParam 256)
   return
     AcmeObjAccount
     { acmeObjAccountKey = keyMat
@@ -250,5 +250,4 @@ acmeNewJwsBody
 acmeNewJwsBody req obj acc dir = do
   nonce <- acmePerformNonce dir
   AcmeErrJws `withExceptT`
-    (AcmeJws <$>
-     jwsSigned obj (acmeRequestUrl req) (acmeObjAccountKey acc) nonce)
+    (jwsSigned obj (acmeRequestUrl req) (acmeObjAccountKey acc) nonce)
