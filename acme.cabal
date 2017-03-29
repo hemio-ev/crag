@@ -22,8 +22,7 @@ library
     DeriveGeneric,
     FlexibleContexts,
     OverloadedStrings,
-    RecordWildCards,
-    TemplateHaskell
+    RecordWildCards
   exposed-modules:
     Network.ACME
     Network.ACME.Errors
@@ -39,7 +38,7 @@ library
     http-client,
     http-conduit,
     http-types,
-    jose >= 6.0,
+    jose >= 0.6,
     lens,
     lens-aeson,
     network,

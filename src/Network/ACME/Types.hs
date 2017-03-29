@@ -233,6 +233,8 @@ newtype AcmeJwsNonce =
 
 instance ToJSON AcmeJwsNonce
 
+instance FromJSON AcmeJwsNonce
+
 newtype AcmeRequestNonceNew =
   AcmeRequestNonceNew URI
   deriving (Show, Generic)

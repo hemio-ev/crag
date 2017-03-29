@@ -20,7 +20,7 @@ module Network.ACME.JWS
   , Base64Octets(..)
   ) where
 
-import Control.Lens (view, review, set, makeLenses, (&), (?~), at)
+import Control.Lens (Lens', view, review, set, (&), (?~), at)
 import Control.Monad.Trans.Except
 import Crypto.JOSE
 import Crypto.JOSE.Types (Base64Octets(..))
@@ -36,27 +36,36 @@ type AcmeJws = JWS AcmeJwsHeader
 
 -- | Enhanced 'JWSHeader' with additional header parameters
 data AcmeJwsHeader = AcmeJwsHeader
-  { _jwsStandardHeader :: JWSHeader
-  , _jwsAcmeHeaderNonce :: AcmeJwsNonce
+  { _acmeJwsHeader :: JWSHeader
+  , _acmeJwsHeaderNonce :: AcmeJwsNonce
   } deriving (Show)
 
-makeLenses ''AcmeJwsHeader
+acmeJwsHeader :: Lens' AcmeJwsHeader JWSHeader
+acmeJwsHeader f s@(AcmeJwsHeader { _acmeJwsHeader = x}) =
+  fmap (\x' -> s { _acmeJwsHeader = x'}) (f x)
+
+acmeJwsHeaderNonce :: Lens' AcmeJwsHeader AcmeJwsNonce
+acmeJwsHeaderNonce f s@(AcmeJwsHeader { _acmeJwsHeaderNonce = x}) =
+  fmap (\x' -> s { _acmeJwsHeaderNonce = x'}) (f x)
 
 instance HasParams AcmeJwsHeader where
-  params x =
-    [(Protected, ("nonce", toJSON (_jwsAcmeHeaderNonce x)))] ++
-    params (_jwsStandardHeader x)
-  parseParamsFor = parseParamsFor
+  parseParamsFor proxy hp hu = AcmeJwsHeader
+    <$> parseParamsFor proxy hp hu
+    <*> headerRequiredProtected "nonce" hp hu
+  params h =
+    (Protected, "nonce" .= view acmeJwsHeaderNonce h)
+    : params (view acmeJwsHeader h)
+  extensions = const ["nonce"]
 
 instance HasJWSHeader AcmeJwsHeader where
-  jWSHeader = jwsStandardHeader
+  jWSHeader = acmeJwsHeader
 
 newAcmeJwsHeader
   :: JWK -- ^ Same key as used for signing. It's okay to include the private key.
   -> AcmeJwsNonce -- ^ Nonce
   -> AcmeJwsHeader
 newAcmeJwsHeader jwk' nonce =
-  AcmeJwsHeader {_jwsStandardHeader = header', _jwsAcmeHeaderNonce = nonce}
+  AcmeJwsHeader {_acmeJwsHeader = header', _acmeJwsHeaderNonce = nonce}
   where
     header' =
       set jwk (HeaderParam Unprotected <$> jwkPublic jwk') (newJWSHeader (Unprotected, alg'))
