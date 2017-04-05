@@ -77,7 +77,9 @@ acmePerformAccountKeyRollover current new dir =
     Just req -> do
       accUrl <- acmePerformAccountURI current dir
       let objRollover =
-            AcmeObjAccountKeyRollover (fromJust $ jwkPublic $ acmeObjAccountKey new) accUrl
+            AcmeObjAccountKeyRollover
+              (fromJust $ jwkPublic $ acmeObjAccountKey new)
+              accUrl
       innerJws <- acmeNewJwsBody req objRollover new dir
       outerJws <- acmeNewJwsBody req innerJws current dir
       acmeHttpPost req outerJws >>= resBody
@@ -215,7 +217,7 @@ acmeGetPendingChallenge
   -> AcmeObjAuthorization
   -> ExceptT AcmeErr IO AcmeObjChallenge
 acmeGetPendingChallenge t =
-  maybeToExceptT (AcmeErrNoChallenge t) . acmeMaybePendingChallenge t
+  maybe (throwE $ AcmeErrNoChallenge t) return . acmeMaybePendingChallenge t
 
 acmeMaybePendingChallenge
   :: String -- ^ Type

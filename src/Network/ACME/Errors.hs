@@ -12,6 +12,8 @@ import Network.HTTP.Types
 
 import Network.ACME.Types
 
+type JwsError = Error
+
 handleError :: ExceptT AcmeErr IO a -> IO a
 handleError x = do
   res <- runExceptT x
@@ -36,7 +38,7 @@ data AcmeErr
                  ,  acmeErrProblemDetail :: ProblemDetail
                  ,  acmeErrRequestBody :: Maybe L.ByteString}
   -- | Wrapper for JWS Errors
-  | AcmeErrJws Error
+  | AcmeErrJws JwsError
     -- | Wrapper for catched HTTP exceptions
   | AcmeErrHttp HttpException
   -- | Wanted challenge type to available

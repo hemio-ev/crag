@@ -19,7 +19,7 @@ acmeJSONoptions pre = defaultOptions {fieldLabelModifier = f pre}
         withoutPrefix =
           case stripPrefix pr str of
             Just x -> x
-            Nothing -> error $ "JSON key " ++ str ++ " has no prefix " ++ pr
+            Nothing -> ""
         startLower (x:xs) = toLower x : xs
         startLower [] = ""
         kebabKase :: Bool -> String -> String -> String

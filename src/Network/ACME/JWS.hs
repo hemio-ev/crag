@@ -20,7 +20,8 @@ module Network.ACME.JWS
   , Base64Octets(..)
   ) where
 
-import Control.Lens (Lens', view, review, set, (&), (?~), at)
+import Control.Lens
+       (Identity(..), Lens', view, review, set, (&), (?~), at)
 import Control.Monad.Trans.Except
 import Crypto.JOSE
 import Crypto.JOSE.Types (Base64Octets(..))
@@ -30,53 +31,54 @@ import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Lazy (toStrict)
 import Network.URI (URI, pathSegments)
 
+import Network.ACME.Errors
 import Network.ACME.Types (AcmeJwsNonce)
 
-type AcmeJws = JWS AcmeJwsHeader
+type AcmeJws = FlattenedJWS AcmeJwsHeader
 
 -- | Enhanced 'JWSHeader' with additional header parameters
-data AcmeJwsHeader = AcmeJwsHeader
-  { _acmeJwsHeader :: JWSHeader
+data AcmeJwsHeader a = AcmeJwsHeader
+  { _acmeJwsHeader :: JWSHeader a
   , _acmeJwsHeaderNonce :: AcmeJwsNonce
   } deriving (Show)
 
-acmeJwsHeader :: Lens' AcmeJwsHeader JWSHeader
-acmeJwsHeader f s@(AcmeJwsHeader { _acmeJwsHeader = x}) =
-  fmap (\x' -> s { _acmeJwsHeader = x'}) (f x)
+acmeJwsHeader :: Lens' (AcmeJwsHeader p) (JWSHeader p)
+acmeJwsHeader f s@(AcmeJwsHeader {_acmeJwsHeader = x}) =
+  fmap (\x' -> s {_acmeJwsHeader = x'}) (f x)
 
-acmeJwsHeaderNonce :: Lens' AcmeJwsHeader AcmeJwsNonce
-acmeJwsHeaderNonce f s@(AcmeJwsHeader { _acmeJwsHeaderNonce = x}) =
-  fmap (\x' -> s { _acmeJwsHeaderNonce = x'}) (f x)
+acmeJwsHeaderNonce :: Lens' (AcmeJwsHeader p) AcmeJwsNonce
+acmeJwsHeaderNonce f s@(AcmeJwsHeader {_acmeJwsHeaderNonce = x}) =
+  fmap (\x' -> s {_acmeJwsHeaderNonce = x'}) (f x)
 
 instance HasParams AcmeJwsHeader where
-  parseParamsFor proxy hp hu = AcmeJwsHeader
-    <$> parseParamsFor proxy hp hu
-    <*> headerRequiredProtected "nonce" hp hu
+  parseParamsFor proxy hp hu =
+    AcmeJwsHeader <$> parseParamsFor proxy hp hu <*>
+    headerRequiredProtected "nonce" hp hu
   params h =
-    (Protected, "nonce" .= view acmeJwsHeaderNonce h)
-    : params (view acmeJwsHeader h)
+    (True, "nonce" .= view acmeJwsHeaderNonce h) : params (view acmeJwsHeader h)
   extensions = const ["nonce"]
 
 instance HasJWSHeader AcmeJwsHeader where
-  jWSHeader = acmeJwsHeader
+  jwsHeader = acmeJwsHeader
 
 newAcmeJwsHeader
   :: JWK -- ^ Same key as used for signing. It's okay to include the private key.
   -> AcmeJwsNonce -- ^ Nonce
-  -> AcmeJwsHeader
-newAcmeJwsHeader jwk' nonce =
-  AcmeJwsHeader {_acmeJwsHeader = header', _acmeJwsHeaderNonce = nonce}
-  where
-    header' =
-      set jwk (HeaderParam Unprotected <$> jwkPublic jwk') (newJWSHeader (Unprotected, alg'))
-    alg' :: Alg
-    alg' =
-      case bestJWSAlg jwk' of
-        Left e -> error (show (e :: Error))
-        -- Boulder sais
-        -- 'detail: signature type 'PS512' in JWS header is not supported'
-        Right PS512 -> RS256
-        Right x -> x
+  -> Either JwsError (AcmeJwsHeader Protection)
+newAcmeJwsHeader jwk' nonce
+ -- Boulder sais
+ -- 'detail: signature type 'PS512' in JWS header is not supported'
+ = do
+  alg' <-
+    case bestJWSAlg jwk' of
+      Right PS512 -> Right RS256
+      x -> x
+  let h =
+        set
+          jwk
+          (HeaderParam Unprotected <$> jwkPublic jwk')
+          (newJWSHeader (Unprotected, alg'))
+  return $ AcmeJwsHeader {_acmeJwsHeader = h, _acmeJwsHeaderNonce = nonce}
 
 -- | Removes private key
 jwkPublic
@@ -86,29 +88,26 @@ jwkPublic jwk' = view asPublicKey jwk'
 
 jwsSigned
   :: (ToJSON a)
-  => a
-  -> URI
-  -> JWK
-  -> AcmeJwsNonce
-  -> ExceptT Error IO (JWS AcmeJwsHeader)
-jwsSigned payload url = signWith (newJWS $ toStrict $ encode payload')
+  => a -> URI -> JWK -> AcmeJwsNonce -> ExceptT JwsError IO AcmeJws
+jwsSigned payload url = signWith payload'
+    -- Workaround for old ACME draft
   where
     payload' =
-      toJSON payload & _Object . at "resource" ?~ toJSON (pathSegments url !! 1)
+      toStrict $ encode $ toJSON payload & _Object . at "resource" ?~
+      toJSON (pathSegments url !! 1)
 
-signWith
-  :: JWS AcmeJwsHeader
-  -> JWK
-  -> AcmeJwsNonce
-  -> ExceptT Error IO (JWS AcmeJwsHeader)
-signWith jwsContent jwk' nonce = signJWS jwsContent header' jwk'
+signWith :: B.ByteString -> JWK -> AcmeJwsNonce -> ExceptT JwsError IO AcmeJws
+signWith jwsContent jwk' nonce =
+  either throwE (\h -> signJWS jwsContent (Identity (h, jwk'))) header'
   where
     header' = newAcmeJwsHeader jwk' nonce
 
 -- | JSON Web Key (JWK) Thumbprint
 -- <https://tools.ietf.org/html/rfc7638 RFC 7638>
 jwkThumbprint :: JWK -> String
-jwkThumbprint x = B.unpack $ review (base64url . digest) (view thumbprint x :: Digest SHA256)
+jwkThumbprint x =
+  B.unpack $ review (base64url . digest) (view thumbprint x :: Digest SHA256)
 
 sha256 :: String -> String
-sha256 x = B.unpack $ review (base64url . digest) (hash (B.pack x) :: Digest SHA256)
+sha256 x =
+  B.unpack $ review (base64url . digest) (hash (B.pack x) :: Digest SHA256)
