@@ -248,8 +248,8 @@ acmeNewJwsBody
   -> o -- ^ Request body
   -> AcmeObjAccount -- ^ Account signing the request
   -> AcmeObjDirectory -- ^ Directory of the server
-  -> ExceptT AcmeErr IO (AcmeJws)
+  -> ExceptT AcmeErr IO AcmeJws
 acmeNewJwsBody req obj acc dir = do
   nonce <- acmePerformNonce dir
   AcmeErrJws `withExceptT`
-    (jwsSigned obj (acmeRequestUrl req) (acmeObjAccountKey acc) nonce)
+    jwsSigned obj (acmeRequestUrl req) (acmeObjAccountKey acc) nonce

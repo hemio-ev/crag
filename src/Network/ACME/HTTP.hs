@@ -34,8 +34,9 @@ resHeaderAsURI x ys = do
   case parseURI h of
     Just u -> return u
     Nothing ->
-      throwE $
-      AcmeErrDecodingHeader {acmeErrHeaderName = show x, acmeErrHeaderValue = h}
+      throwE
+        AcmeErrDecodingHeader
+        {acmeErrHeaderName = show x, acmeErrHeaderValue = h}
 
 resBody
   :: FromJSON a
@@ -44,8 +45,7 @@ resBody res =
   case eitherDecode (acmeResponseBody res) of
     Right x -> return x
     Left msg ->
-      throwE $
-      AcmeErrDecodingBody {acmeErrMessage = msg, acmeErrBody = show res}
+      throwE AcmeErrDecodingBody {acmeErrMessage = msg, acmeErrBody = show res}
 
 -- ** Perform ACME Server Request
 -- | Perform POST query
@@ -106,8 +106,8 @@ parseResult req bod resIO =
             case eitherDecode (getResponseBody res) of
               Right e ->
                 AcmeErrDetail
-                { acmeErrRequest = (show req)
-                , acmeErrHttpStatus = (getResponseStatus res)
+                { acmeErrRequest = show req
+                , acmeErrHttpStatus = getResponseStatus res
                 , acmeErrProblemDetail = e
                 , acmeErrRequestBody = bod
                 }

@@ -43,11 +43,11 @@ data AcmeJwsHeader a = AcmeJwsHeader
   } deriving (Show)
 
 acmeJwsHeader :: Lens' (AcmeJwsHeader p) (JWSHeader p)
-acmeJwsHeader f s@(AcmeJwsHeader {_acmeJwsHeader = x}) =
+acmeJwsHeader f s@AcmeJwsHeader {_acmeJwsHeader = x} =
   fmap (\x' -> s {_acmeJwsHeader = x'}) (f x)
 
 acmeJwsHeaderNonce :: Lens' (AcmeJwsHeader p) AcmeJwsNonce
-acmeJwsHeaderNonce f s@(AcmeJwsHeader {_acmeJwsHeaderNonce = x}) =
+acmeJwsHeaderNonce f s@AcmeJwsHeader {_acmeJwsHeaderNonce = x} =
   fmap (\x' -> s {_acmeJwsHeaderNonce = x'}) (f x)
 
 instance HasParams AcmeJwsHeader where
@@ -78,13 +78,13 @@ newAcmeJwsHeader jwk' nonce
           jwk
           (HeaderParam Unprotected <$> jwkPublic jwk')
           (newJWSHeader (Unprotected, alg'))
-  return $ AcmeJwsHeader {_acmeJwsHeader = h, _acmeJwsHeaderNonce = nonce}
+  return AcmeJwsHeader {_acmeJwsHeader = h, _acmeJwsHeaderNonce = nonce}
 
 -- | Removes private key
 jwkPublic
   :: AsPublicKey a
   => a -> Maybe a
-jwkPublic jwk' = view asPublicKey jwk'
+jwkPublic = view asPublicKey
 
 jwsSigned
   :: (ToJSON a)

@@ -18,4 +18,5 @@ test:
 format-code: $(HS)
 
 $(HS):
+	@./.cabal-sandbox/bin/hlint $@
 	@./.cabal-sandbox/bin/hindent $@

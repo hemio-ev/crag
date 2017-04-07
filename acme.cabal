@@ -106,7 +106,8 @@ test-suite acme-integration
     x509,
     pem,
     -- dev
-    hindent
+    hindent,
+    hlint > 2
   ghc-options:
     -Wall
     -Wcompat
