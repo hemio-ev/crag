@@ -1,9 +1,9 @@
-# libghc-acme
+# crag 
 
 Native Haskell client library for ACME (Automatic Certificate Management
 Environment)
 
-[![build status](https://git.hemio.de/hemio/libghc-acme/badges/master/build.svg)](https://git.hemio.de/hemio/libghc-acme/commits/master)
+[![build status](https://git.hemio.de/hemio/crag/badges/master/build.svg)](https://git.hemio.de/hemio/crag/commits/master)
 
 ## Interation Tests
 
