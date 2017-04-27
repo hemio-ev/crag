@@ -3,5 +3,5 @@ build_job:
         - cabal update
         - cabal sandbox init
         - cabal install --enable-tests --enable-coverage
-        - cabal test acme-unit
+        - cabal test crag-unit
 
