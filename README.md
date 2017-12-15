@@ -4,6 +4,7 @@ Native Haskell client library for ACME (Automatic Certificate Management
 Environment)
 
 [![build status](https://git.hemio.de/hemio/crag/badges/master/build.svg)](https://git.hemio.de/hemio/crag/commits/master)
+[![coverage report](https://git.hemio.de/hemio/crag/badges/master/coverage.svg)](https://git.hemio.de/hemio/crag/commits/master)
 
 **This library is WORK IN PROGRESS**
 
