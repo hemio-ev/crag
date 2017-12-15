@@ -3,44 +3,39 @@ module TestIntegration
   ) where
 
 import Control.Concurrent (forkIO, threadDelay)
-import Control.Monad
 import Control.Monad.IO.Class
 
 import Control.Exception
 
 --import Control.Monad.Trans.Class
 --import Control.Monad.Trans.Except
-import Control.Monad.Trans.State
+import Control.Monad.Trans.State (evalStateT)
 import Crypto.Hash
 import Crypto.PubKey.RSA
 import Data.Aeson
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
-import Data.Default (def)
+
 import Data.Maybe
 import Data.PEM
 import Data.X509
 import Data.X509.PKCS10
 import Network.Connection -- (settingDisableCertificateValidation)
 import Network.HTTP.Client
-  ( managerResponseTimeout
+  ( Manager
+  , managerResponseTimeout
   , newManager
   , responseTimeoutMicro
   )
 import Network.HTTP.Client.TLS (mkManagerSettings)
-import Network.HTTP.Simple
 import Network.HTTP.Types
-import Network.URI
-import Network.Wai (Application, responseLBS)
+import Network.Wai (responseLBS)
 import Network.Wai.Handler.Warp
 import System.Process (spawnProcess, terminateProcess)
 import Test.Tasty
 import Test.Tasty.HUnit
 
---import Network.HTTP.Types (status200)
 import Network.ACME
-import Network.ACME.Errors
-import Network.ACME.HTTP (AcmeT)
 
 pebbleResource :: TestTree -> TestTree
 pebbleResource = withResource pebbleProcess terminateProcess . const
@@ -58,7 +53,7 @@ integrationTests =
 myHttpServer :: String -> IO ()
 myHttpServer x = run 5002 app
   where
-    app req respond = respond $ responseLBS status200 [] (L.pack x)
+    app _ respond = respond $ responseLBS status200 [] (L.pack x)
 
 prettyHandle :: IO a -> IO a
 prettyHandle = handle handler
@@ -66,6 +61,7 @@ prettyHandle = handle handler
     handler :: SomeException -> IO a
     handler = error . displayException
 
+newUnsafeTestManager :: IO Manager
 newUnsafeTestManager =
   newManager
     (mkManagerSettings (TLSSettingsSimple True False False) Nothing)
@@ -74,8 +70,8 @@ newUnsafeTestManager =
 challengeResponders :: [(String, ChallengeResponder ())]
 challengeResponders =
   [ ( "http-01"
-    , \hostname (AcmeKeyAuthorization auhtzkey) c -> do
-        liftIO $ forkIO $ myHttpServer auhtzkey
+    , \_ (AcmeKeyAuthorization auhtzkey) c -> do
+        _ <- liftIO $ forkIO $ myHttpServer auhtzkey
         liftIO $ putStrLn "responded"
         -- submit challenge without rollback thing
         _ <- c $ return ()
@@ -111,7 +107,7 @@ testOrderNew =
       --liftIO $ print keyau
         -- Left e <- runExceptT $ 
         -- (acmeErrD e >>= problemDetailType) @?= parseURI "urn:acme:error:malformed"
-      liftIO $ print "ende"
+      liftIO $ putStrLn "ende"
 
 testNewAccount :: TestTree
 testNewAccount =
@@ -124,7 +120,7 @@ testNewAccount =
     state <- acmePerformState' manager confUrl jwk
     --liftIO $ step "acmePerformAccountNew"
     flip evalStateT state $ do
-      accReturned <- acmePerformAccountNew acc
+      _ <- acmePerformAccountNew acc
         --liftIO $ acmeObjAccountContact accReturned @?= acmeObjAccountContact acc
         --liftIO $ step "acmePerformAccountUrl"
       url <- acmePerformAccountUrl
@@ -232,21 +228,3 @@ newCrt domain = do
 
 confUrl :: URL
 confUrl = fromJust $ decode "\"https://localhost:14000/dir\""
-
-setDnsTxt :: String -> String -> IO (Response L.ByteString)
-setDnsTxt hostName rdata = do
-  res <- httpLBS req
-  getResponseStatus res @?= status200
-  return res
-  where
-    req =
-      setRequestBodyLBS
-        body
-        (parseRequest_ "POST http://172.17.0.1:8055/set-txt")
-    body =
-      encode $
-      object
-        ["host" .= ("_acme-challenge." ++ hostName ++ "."), "value" .= rdata]
-
-assertExceptT :: IO a -> IO a
-assertExceptT y = y -- catch exceptions
