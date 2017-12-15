@@ -1,6 +1,5 @@
 module Network.ACME.Errors where
 
-import Control.Monad.Trans.Except
 import Crypto.JOSE
 import qualified Data.ByteString.Lazy.Char8 as L
 
@@ -11,15 +10,6 @@ import Network.HTTP.Types
 
 type JwsError = Error
 
-maybeToExceptT :: AcmeErr -> Maybe a -> ExceptT AcmeErr IO a
-maybeToExceptT e Nothing = throwE e
-maybeToExceptT _ (Just x) = return x
-
---throwAcmeErrRequestNotSupported
---  :: AcmeRequest a
---  => Maybe a -> ExceptT AcmeErr IO b
---throwAcmeErrRequestNotSupported x =
---  throwE $ AcmeErrRequestNotSupported (show $ head $ typeRepArgs $ typeOf x)
 data AcmeErr
   -- | Server reported an error with structured details
   = AcmeErrDetail { acmeErrRequest :: String
