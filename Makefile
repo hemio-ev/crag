@@ -1,5 +1,7 @@
-HS = $(shell find src/ test/ -name '*.hs')
+export GOPATH := $(shell pwd)/gopath
 
+PEBBLE_PATH = $(GOPATH)/src/github.com/letsencrypt/pebble
+HS = $(shell find src/ test/ -name '*.hs')
 
 .PHONY: test $(HS)
 
@@ -15,6 +17,14 @@ configure-coverage:
 test:
 	cabal configure --disable-optimi --enable-tests
 	cabal test --show-details=direct --test-option=--color=always
+
+pebble: pebble-get pebble-install
+
+pebble-get:
+	go get -d -u github.com/letsencrypt/pebble/...
+
+pebble-install:
+	cd $(PEBBLE_PATH); go install ./...
 
 fixerr:
 	sed -i "s/^mapM$$/  mapM/g" src/Network/ACME/Types.hs
