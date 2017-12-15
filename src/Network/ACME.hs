@@ -29,7 +29,6 @@ import Network.ACME.HTTP
 import Network.ACME.JWS as X
 import Network.ACME.Types as X
 
-
 -- * Perform Requests
 -- ** Directory
 acmePerformState :: URL -> JWK -> IO AcmeState

@@ -18,6 +18,7 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Default (def)
 import Data.Maybe
+import Data.PEM
 import Data.X509
 import Data.X509.PKCS10
 import Network.Connection -- (settingDisableCertificateValidation)
@@ -30,15 +31,23 @@ import Network.HTTP.Client.TLS (mkManagerSettings)
 import Network.HTTP.Simple
 import Network.HTTP.Types
 import Network.URI
+import Network.Wai (Application, responseLBS)
+import Network.Wai.Handler.Warp
 import Test.Tasty
 import Test.Tasty.HUnit
-import Data.PEM
 
+--import Network.HTTP.Types (status200)
 import Network.ACME
 import Network.ACME.Errors
+import Network.ACME.HTTP (AcmeT)
 
 integrationTests :: TestTree
 integrationTests = testGroup "Network.ACME" [testAccount, testOrderNew] --[testAccount, testFail]
+
+myHttpServer :: String -> IO ()
+myHttpServer x = run 5002 app
+  where
+    app req respond = respond $ responseLBS status200 [] (L.pack x)
 
 prettyHandle :: IO a -> IO a
 prettyHandle = handle handler
@@ -51,11 +60,16 @@ newUnsafeTestManager =
     (mkManagerSettings (TLSSettingsSimple True False False) Nothing)
     {managerResponseTimeout = responseTimeoutMicro 3000000}
 
+challengeResponders :: [(String, ChallengeResponder ())]
 challengeResponders =
-  [ ( "dns-01"
-    , \a b c -> do
+  [ ( "http-01"
+    , \hostname (AcmeKeyAuthorization auhtzkey) c -> do
+        liftIO $ forkIO $ myHttpServer auhtzkey
         liftIO $ putStrLn "responded"
+        -- submit challenge without rollback thing
         _ <- c $ return ()
+        -- TODO: replace with polling
+        liftIO $ threadDelay (10 * 1000000)
         liftIO $ putStrLn "submitted")
   ]
 
@@ -68,10 +82,10 @@ testOrderNew =
     state <- acmePerformState' manager confUrl jwk
     flip evalStateT state $ do
       _ <- acmePerformAccountNew accStub
-      csr <- liftIO $ newCrt "abc.hemev-test-16.xyz"
+      let domain = "localhost"
+      csr <- liftIO $ newCrt domain
       let cert = Base64Octets csr
-      orderStatus <-
-        acmePerformOrderNew $ acmeNewObjOrder ["abc.hemev-test-16.xyz"]
+      orderStatus <- acmePerformOrderNew $ acmeNewObjOrder [domain]
       liftIO $ print orderStatus
       auths <-
         mapM acmePerformAuthorizationGet $

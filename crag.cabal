@@ -109,6 +109,10 @@ test-suite crag-integration
     cryptonite,
     x509,
     pem,
+    warp,
+    wai,
+    -- hindent dep. fix
+    haskell-src-exts < 1.20,
     -- dev
     hindent,
     hlint > 2

@@ -166,7 +166,8 @@ data ProblemDetail = ProblemDetail
   , problemDetailInstance :: Maybe URI
   } deriving (Show)
 
-concat <$> mapM
+concat <$>
+  mapM
   deriveAcmeJSON
   [ ''AcmeDirectoryMeta
   , ''AcmeJwsNonce
