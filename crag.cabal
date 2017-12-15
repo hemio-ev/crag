@@ -1,5 +1,5 @@
 name:                crag
-version:             0.0.0.1
+version:             0.0.0.2
 synopsis:            ACME Library
 -- description:         
 homepage:            https://git.hemio.de/hemio/crag
@@ -11,7 +11,7 @@ maintainer:          sophie@hemio.de
 category:            Web
 build-type:          Simple
 extra-source-files:  ChangeLog.md
-cabal-version:       >=1.10
+cabal-version:       >=1.20
 
 library
   default-extensions:
@@ -19,7 +19,8 @@ library
     DeriveGeneric,
     FlexibleContexts,
     OverloadedStrings,
-    RecordWildCards
+    RecordWildCards,
+    TemplateHaskell
   exposed-modules:
     Network.ACME
     Network.ACME.Errors
@@ -31,19 +32,20 @@ library
     base >=4.8 && <4.10,
     aeson,
     bytestring,
-    filepath,
+    case-insensitive,
     http-client,
+    http-client-tls >= 0.3.5,
     http-conduit,
     http-types,
     jose >= 0.6,
     lens,
-    lens-aeson,
+    lifted-base,
     network,
     network-uri,
     time,
     transformers,
-    x509,
-    yaml
+    template-haskell,
+    x509
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options:
@@ -82,12 +84,16 @@ test-suite crag-integration
   type:       exitcode-stdio-1.0
   main-is:    test/crag-integration.hs
   hs-source-dirs: . test
+  other-modules: TestIntegration
   build-depends:
     crag,
     base >=4.8 && <4.10,
     aeson,
     bytestring,
+    connection,
+    data-default,
     http-client,
+    http-client-tls >= 0.3.5,
     http-conduit,
     http-types,
     network,
@@ -99,6 +105,7 @@ test-suite crag-integration
     tasty,
     tasty-hunit,
     pkcs10,
+    pem,
     cryptonite,
     x509,
     pem,

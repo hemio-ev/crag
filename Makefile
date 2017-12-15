@@ -1,4 +1,4 @@
-HS = $(shell find app/ src/ test/ -name '*.hs')
+HS = $(shell find src/ test/ -name '*.hs')
 
 
 .PHONY: test $(HS)
@@ -13,6 +13,7 @@ configure-coverage:
 	cabal configure --enable-tests --enable-coverage
 
 test:
+	cabal configure --disable-optimi --enable-tests
 	cabal test --show-details=direct --test-option=--color=always
 
 format-code: $(HS)
