@@ -3,5 +3,6 @@ build_job:
         - cabal update
         - cabal sandbox init
         - cabal install --enable-tests --enable-coverage
+        - make pebble
         - cabal test crag-unit
 

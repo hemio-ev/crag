@@ -2,7 +2,7 @@ module TestIntegration
   ( integrationTests
   ) where
 
-import Control.Concurrent
+import Control.Concurrent (forkIO, threadDelay)
 import Control.Monad
 import Control.Monad.IO.Class
 
@@ -33,6 +33,7 @@ import Network.HTTP.Types
 import Network.URI
 import Network.Wai (Application, responseLBS)
 import Network.Wai.Handler.Warp
+import System.Process (spawnProcess, terminateProcess)
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -41,8 +42,18 @@ import Network.ACME
 import Network.ACME.Errors
 import Network.ACME.HTTP (AcmeT)
 
+pebbleResource :: TestTree -> TestTree
+pebbleResource = withResource pebbleProcess terminateProcess . const
+  where
+    pebbleProcess = do
+      p <- spawnProcess "gopath/bin/pebble" []
+      -- TODO: wait for 'Pebble running'
+      threadDelay (2 * 1000000)
+      return p
+
 integrationTests :: TestTree
-integrationTests = testGroup "Network.ACME" [testAccount, testOrderNew] --[testAccount, testFail]
+integrationTests =
+  pebbleResource $ testGroup "Network.ACME" [testNewAccount, testOrderNew]
 
 myHttpServer :: String -> IO ()
 myHttpServer x = run 5002 app
@@ -102,8 +113,8 @@ testOrderNew =
         -- (acmeErrD e >>= problemDetailType) @?= parseURI "urn:acme:error:malformed"
       liftIO $ print "ende"
 
-testAccount :: TestTree
-testAccount =
+testNewAccount :: TestTree
+testNewAccount =
   testCase "Account operations" $
   prettyHandle $
       --step "Nr. X"

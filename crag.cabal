@@ -107,6 +107,7 @@ test-suite crag-integration
     pkcs10,
     pem,
     cryptonite,
+    process,
     x509,
     pem,
     warp,
