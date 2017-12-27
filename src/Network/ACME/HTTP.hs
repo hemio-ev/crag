@@ -6,7 +6,7 @@ module Network.ACME.HTTP
   , acmeHttpJwsPostUrl
   , getResponseBody
   , resBody
-  , resHeaderAsURI
+  , resHeaderAsURL
   , acmePerformDirectory
   ) where
 
@@ -33,11 +33,11 @@ import Network.HTTP.Types
   , hContentType
   , renderStdMethod
   )
-import Network.URI (parseURI)
 
 import Network.ACME.Errors
 import Network.ACME.JWS
-import Network.ACME.Types
+import Network.ACME.Object
+import Network.ACME.Type
 
 maxRetries :: Int
 maxRetries = 20
@@ -72,13 +72,12 @@ resHeader :: HeaderName -> AcmeResponse -> IO String
 resHeader h r = maybe (error "AcmeErrHeaderNotFound") return (getHeader h r)
 
 --  $ AcmeErrHeaderNotFound h (Protocoll violation)
-resHeaderAsURI :: HeaderName -> AcmeResponse -> IO URL
-resHeaderAsURI x ys = do
+resHeaderAsURL :: HeaderName -> AcmeResponse -> IO URL
+resHeaderAsURL x ys = do
   h <- resHeader x ys
-  case parseURI h of
+  case parseURL h of
     Just u -> return u
-    Nothing --error "AcmeErrDecodingHeader"
-     ->
+    Nothing ->
       throw
         AcmeErrDecodingHeader
         {acmeErrHeaderName = show x, acmeErrHeaderValue = h}
@@ -129,7 +128,7 @@ errBadNonce _ = False
 
 acmeHttpJwsPost' :: (ToJSON a) => Int -> Bool -> URL -> a -> AcmeT AcmeResponse
 acmeHttpJwsPost' retried withKid url bod = do
-  vKid <- acmePerformAccountUrl
+  vKid <- acmePerformFindAccountURL
   acmeTSetKid vKid
   nonce <- acmeTGetNonce
   vJwkPublic <- gets acmeStateJwkPublic
@@ -146,13 +145,13 @@ acmeHttpJwsPost' retried withKid url bod = do
         acmeHttpJwsPost' (retried + 1) withKid url bod
       | otherwise = throw e
     handler e = throw e
-    acmePerformAccountUrl :: AcmeT (Maybe URL)
-    acmePerformAccountUrl
+    acmePerformFindAccountURL :: AcmeT (Maybe URL)
+    acmePerformFindAccountURL
       | withKid =
         Just <$> do
           res <-
             acmeHttpJwsPostNewAccount AcmeDirectoryRequestNewAccount emptyObject
-          liftIO $ resHeaderAsURI "Location" res
+          liftIO $ resHeaderAsURL "Location" res
       | otherwise = return Nothing
 
 -- ** Perform ACME Server Request
@@ -194,7 +193,7 @@ newHttpRequest :: StdMethod -> URL -> Request
 newHttpRequest meth acmeReq =
   setRequestMethod (renderStdMethod meth) (parseRequest_ url)
   where
-    url = show acmeReq
+    url = urlToString acmeReq
 
 -- hContentType
 -- takeWhile ((`notElem` [';', ' '])) 
@@ -218,7 +217,7 @@ parseResult req bod resIO = do
            Right e ->
              throw
                AcmeErrDetail
-               { acmeErrRequest = show req
+               { acmeErrRequest = req
                , acmeErrHttpStatus = getResponseStatus res
                , acmeErrProblemDetail = e
                , acmeErrRequestBody = bod

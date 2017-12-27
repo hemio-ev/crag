@@ -4,7 +4,7 @@ import Crypto.JOSE
 import qualified Data.ByteString.Lazy.Char8 as L
 
 import Control.Exception
-import Network.ACME.Types
+import Network.ACME.Object
 import Network.HTTP.Client
 import Network.HTTP.Types
 
@@ -12,7 +12,7 @@ type JwsError = Error
 
 data AcmeErr
   -- | Server reported an error with structured details
-  = AcmeErrDetail { acmeErrRequest :: String
+  = AcmeErrDetail { acmeErrRequest :: URL
                   , acmeErrHttpStatus :: Status
                   , acmeErrProblemDetail :: ProblemDetail
                   , acmeErrRequestBody :: Maybe L.ByteString }

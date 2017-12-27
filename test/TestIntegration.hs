@@ -84,21 +84,16 @@ testOrderNew =
     manager <- newUnsafeTestManager
     state <- acmePerformState' manager confUrl jwk
     flip evalStateT state $ do
-      _ <- acmePerformAccountNew accStub
       let domain = "localhost"
       csr <- liftIO $ newCrt domain
       let cert = Base64Octets csr
-      orderStatus <- acmePerformOrderNew $ acmeNewObjOrder [domain]
-      liftIO $ print orderStatus
-      auths <-
-        mapM acmePerformAuthorizationGet $
-        acmeObjOrderStatusAuthorizations orderStatus
-      liftIO $ print auths
-      mips <- acmePerformChallengeResponses challengeResponders auths
-      liftIO $ print mips
-      rrr <- acmePerformFinalize (acmeObjOrderStatusFinalize orderStatus) cert
-      liftIO $ print rrr
-      liftIO $ putStrLn "ende"
+      _ <- acmePerformCreateAccount accStub
+      objOrder <- acmePerformNewOrder (acmeNewObjOrder [domain])
+      _ <-
+        acmePerformGetAuthorizations objOrder >>=
+        acmePerformChallengeResponses challengeResponders
+      _ <- acmePerformFinalizeOrder objOrder cert
+      return ()
 
 testNewAccount :: TestTree
 testNewAccount =
@@ -107,8 +102,8 @@ testNewAccount =
     manager <- newUnsafeTestManager
     state <- acmePerformState' manager confUrl jwk
     flip evalStateT state $ do
-      _ <- acmePerformAccountNew acc
-      url <- acmePerformAccountUrl
+      _ <- acmePerformCreateAccount acc
+      url <- acmePerformFindAccountURL
       liftIO $ print url
       return ()
     return ()

@@ -27,10 +27,10 @@ pebble-install:
 	cd $(PEBBLE_PATH); go install ./...
 
 fixerr:
-	sed -i "s/^mapM$$/  mapM/g" src/Network/ACME/Types.hs
+	sed -i "s/^mapM$$/  mapM/g" src/Network/ACME/Object.hs
 
 format-code: fixerr $(HS)
-	sed -i "s/^mapM$$/  mapM/" src/Network/ACME/Types.hs
+	sed -i "s/^mapM$$/  mapM/" src/Network/ACME/Object.hs
 
 $(HS):
 	@./.cabal-sandbox/bin/hlint $@

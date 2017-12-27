@@ -1,5 +1,6 @@
 module Network.ACME.Internal where
 
+import Crypto.JOSE.Types ()
 import Data.Aeson
 import Data.Aeson.TH (deriveJSON)
 import Data.Aeson.Types
@@ -7,6 +8,7 @@ import Data.Char
 import Data.List
 import GHC.Generics
 import Language.Haskell.TH.Syntax (Dec, Name, Q, nameBase)
+import Network.URI (URI, uriScheme)
 
 parseAcmeServerResponse ::
      (Generic a, GFromJSON Zero (Rep a)) => String -> Value -> Parser a
@@ -36,3 +38,20 @@ toAcmeRequestBody pre = genericToJSON (acmeJSONoptions pre)
 
 toAcmeConfigStore :: (Generic a, GToJSON Zero (Rep a)) => String -> a -> Value
 toAcmeConfigStore = toAcmeRequestBody
+
+data URL =
+  URL URI
+  deriving (Show)
+
+isValidURL :: URI -> Bool
+isValidURL = (== "https:") . uriScheme
+
+instance FromJSON URL where
+  parseJSON x = do
+    u <- parseJSON x
+    if isValidURL u
+      then return (URL u)
+      else fail "Unable to parse URI: scheme is not https"
+
+instance ToJSON URL where
+  toJSON (URL u) = toJSON u

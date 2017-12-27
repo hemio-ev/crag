@@ -36,7 +36,7 @@ import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Lazy (toStrict)
 
 import Network.ACME.Errors
-import Network.ACME.Types (AcmeJwsNonce, URL)
+import Network.ACME.Object (AcmeJwsNonce, URL, urlToString)
 
 type AcmeJws = FlattenedJWS AcmeJwsHeader
 
@@ -86,7 +86,7 @@ newAcmeJwsHeader vUrl vJwkPrivate vJwkPublic vNonce vKid
         Left e -> throw $ AcmeErrJws e
     setAuth =
       case vKid of
-        Just k -> set kid (Just $ HeaderParam Protected (show k))
+        Just k -> set kid (Just $ HeaderParam Protected (urlToString k))
         Nothing -> set jwk (Just $ HeaderParam Protected vJwkPublic)
 
 -- | Removes private key

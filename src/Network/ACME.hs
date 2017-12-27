@@ -8,17 +8,12 @@ import Control.Monad (msum, void)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.State (gets)
+import Crypto.JOSE (KeyMaterialGenParam(RSAGenParam), genJWK)
+import Data.Default.Class (def)
 import Network.Socket (HostName)
 
---import Control.Monad.Trans.Except
---import Control.Monad.Trans.State
-import Crypto.JOSE (KeyMaterialGenParam(RSAGenParam), genJWK)
-
---import Data.Aeson
-import Data.Aeson.Types (emptyObject)
-
---import qualified Data.ByteString.Lazy.Char8 as L
-import Data.Foldable
+--import Data.Aeson.Types (emptyObject)
+--import Data.Foldable
 import Data.Maybe
 import qualified Data.X509 as X509
 import Network.HTTP.Client (Manager) -- defaultManagerSettings
@@ -27,7 +22,8 @@ import Network.HTTP.Client.TLS (newTlsManager)
 import Network.ACME.Errors as X
 import Network.ACME.HTTP
 import Network.ACME.JWS as X
-import Network.ACME.Types as X
+import Network.ACME.Object as X
+import Network.ACME.Type
 
 -- * Perform Requests
 -- ** Directory
@@ -50,21 +46,24 @@ acmePerformState' manager vUrl vJwk = do
     }
 
 -- ** Account
--- | Registeres new account
-acmePerformAccountNew :: AcmeObjStubAccount -> AcmeT AcmeObjAccount
-acmePerformAccountNew stubAcc =
+-- | Account Creation (Registration)
+acmePerformCreateAccount :: AcmeObjStubAccount -> AcmeT AcmeObjAccount
+acmePerformCreateAccount stubAcc =
   resBody <$> acmeHttpJwsPostNewAccount AcmeDirectoryRequestNewAccount stubAcc
 
--- | Recover the account uri
-acmePerformAccountUrl :: AcmeT URL
-acmePerformAccountUrl = do
-  res <- acmeHttpJwsPostNewAccount AcmeDirectoryRequestNewAccount emptyObject
-  lift $ resHeaderAsURI "Location" res
+-- | Finding an Account URL Given a Key
+acmePerformFindAccountURL :: AcmeT URL
+acmePerformFindAccountURL = do
+  res <-
+    acmeHttpJwsPostNewAccount
+      AcmeDirectoryRequestNewAccount
+      def {acmeObjStubAccountOnlyReturnExisting = Just True}
+  lift $ resHeaderAsURL "Location" res
 
--- | Update account
-acmePerformAccountUpdate :: AcmeObjAccount -> AcmeT AcmeObjAccount
-acmePerformAccountUpdate newAcc = do
-  url <- acmePerformAccountUrl
+-- | Account Update
+acmePerformUpdateAccount :: AcmeObjAccount -> AcmeT AcmeObjAccount
+acmePerformUpdateAccount newAcc = do
+  url <- acmePerformFindAccountURL
   resBody <$> acmeHttpJwsPostUrl url newAcc
 
 -- | Key Roll-over
@@ -73,7 +72,7 @@ acmePerformAccountKeyRollover ::
   -> JWK -- ^ Same account with new key
   -> AcmeT AcmeObjAccount
 acmePerformAccountKeyRollover current _
-  --accUrl <- acmePerformAccountUrl
+  --accUrl <- acmePerformFindAccountURL
   --let objRollover = AcmeObjAccountKeyRollover (jwkPublic new) (Just accUrl)
   --innerJws <- return current -- acmeNewJwsBody req objRollover new
  = do
@@ -82,8 +81,8 @@ acmePerformAccountKeyRollover current _
 
 -- ** Certificate
 -- | Create new application (handing in a certificate request)
-acmePerformOrderNew :: AcmeObjOrder -> AcmeT AcmeObjOrderStatus
-acmePerformOrderNew ord =
+acmePerformNewOrder :: AcmeObjNewOrder -> AcmeT AcmeObjOrder
+acmePerformNewOrder ord =
   resBody <$> acmeHttpJwsPost AcmeDirectoryRequestNewOrder ord
   -- :: X509.SignedCertificate
 
@@ -96,8 +95,12 @@ acmePerformOrderNew ord =
         Left e -> throw (AcmeErrDecodingX509 e (show b))
 -}
 -- ** Authorization
-acmePerformAuthorizationGet :: URL -> AcmeT AcmeObjAuthorization
-acmePerformAuthorizationGet url = resBody <$> acmeHttpGet url
+acmePerformGetAuthorizations :: AcmeObjOrder -> AcmeT [AcmeObjAuthorization]
+acmePerformGetAuthorizations =
+  mapM acmePerformGetAuthorization . acmeObjOrderAuthorizations
+
+acmePerformGetAuthorization :: URL -> AcmeT AcmeObjAuthorization
+acmePerformGetAuthorization url = resBody <$> acmeHttpGet url
 
 type ChallengeResponder a
    = HostName -> AcmeKeyAuthorization -> (IO () -> AcmeT AcmeObjChallenge) -- ^ Perform challenge response, first argument is rollback
@@ -125,9 +128,13 @@ acmePerformChallengeResponses fs as = do
           authz = acmeChallengeRespond (acmeObjChallengeUrl ch) argKey
       f argId argKey authz
 
-acmePerformFinalize :: URL -> Base64Octets -> AcmeT AcmeObjOrderStatus
-acmePerformFinalize url csr =
-  resBody <$> acmeHttpJwsPostUrl url (AcmeObjFinalize csr)
+acmePerformFinalizeOrder :: AcmeObjOrder -> Base64Octets -> AcmeT AcmeObjOrder
+acmePerformFinalizeOrder order =
+  acmePerformFinalizeOrder' (acmeObjOrderFinalize order)
+
+acmePerformFinalizeOrder' :: URL -> Base64Octets -> AcmeT AcmeObjOrder
+acmePerformFinalizeOrder' url csr =
+  resBody <$> acmeHttpJwsPostUrl url (AcmeObjFinalizeOrder csr)
 
 {-
 -- | New authorization
@@ -151,8 +158,8 @@ acmeChallengeRespond' :: URL -> AcmeKeyAuthorization -> AcmeT AcmeObjChallenge
 acmeChallengeRespond' req k = acmeChallengeRespond req k (return ())
 
 -- | Revoke
-acmePerformCertificateRevoke :: AcmeObjCertificateRevoke -> AcmeT ()
-acmePerformCertificateRevoke obj =
+acmePerformRevokeCertificate :: AcmeObjRevokeCertificate -> AcmeT ()
+acmePerformRevokeCertificate obj =
   void (acmeHttpJwsPost AcmeDirectoryRequestRevokeCert obj)
 
 -- * Utils
@@ -161,34 +168,34 @@ acmeNewObjAccountStub :: String -> IO (AcmeObjStubAccount, JWK)
 acmeNewObjAccountStub mail = do
   keyMat <- genJWK (RSAGenParam 256)
   return
-    ( AcmeObjStubAccount
+    ( def
       { acmeObjStubAccountContact = Just ["mailto:" ++ mail]
       , acmeObjStubAccountTermsOfServiceAgreed = Just True
-      , acmeObjStubAccountOnlyReturnExisting = Nothing
       }
     , keyMat)
 
-acmeNewObjOrder :: [String] -> AcmeObjOrder
+acmeNewObjOrder :: [String] -> AcmeObjNewOrder
 acmeNewObjOrder xs =
-  AcmeObjOrder
-  { acmeObjOrderIdentifiers = map toId xs
-  , acmeObjOrderNotBefore = Nothing
-  , acmeObjOrderNotAfter = Nothing
+  AcmeObjNewOrder
+  { acmeObjNewOrderIdentifiers = map toId xs
+  , acmeObjNewOrderNotBefore = Nothing
+  , acmeObjNewOrderNotAfter = Nothing
   }
   where
     toId v =
       AcmeObjIdentifier
       {acmeObjIdentifierType = "dns", acmeObjIdentifierValue = v}
 
-acmeNewObjCertificateRevoke ::
-     X509.SignedCertificate -> AcmeObjCertificateRevoke
-acmeNewObjCertificateRevoke crt =
-  AcmeObjCertificateRevoke
-  { acmeObjCertificateRevokeCertificate =
+acmeNewObjRevokeCertificate ::
+     X509.SignedCertificate -> AcmeObjRevokeCertificate
+acmeNewObjRevokeCertificate crt =
+  AcmeObjRevokeCertificate
+  { acmeObjRevokeCertificateCertificate =
       Base64Octets (X509.encodeSignedObject crt)
-  , acmeObjCertificateRevokeReason = Nothing
+  , acmeObjRevokeCertificateReason = Nothing
   }
 
+{-
 -- ** Object inquiry 
 acmeGetPendingChallenge ::
      String -- ^ Type
@@ -206,8 +213,9 @@ acmeMaybePendingChallenge t authz =
   where
     cond x =
       acmeObjChallengeStatus x == "pending" && acmeObjChallengeType x == t
-
+-}
 -- ** Other
+-- | keyAuthorization for a given challenge
 acmeKeyAuthorization :: AcmeObjChallenge -> AcmeT AcmeKeyAuthorization
 acmeKeyAuthorization ch = do
   jwk <- gets acmeStateJwkPublic

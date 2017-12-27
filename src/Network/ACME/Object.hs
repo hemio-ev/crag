@@ -1,25 +1,26 @@
-module Network.ACME.Types where
+module Network.ACME.Object
+  ( URL
+  , module Network.ACME.Object
+  ) where
 
 import Crypto.JOSE (JWK)
 import Crypto.JOSE.Types (Base64Octets)
+import Data.Default.Class (Default(def))
 import Data.Time (ZonedTime)
-import qualified Network.HTTP.Client
 import Network.Socket (HostName)
-import Network.URI (URI)
+import Network.URI (URI, parseURI)
 
 import Network.ACME.Internal
 
--- * ACME Internal?
-data AcmeState = AcmeState
-  { acmeStateDirectory :: AcmeObjDirectory
-  , acmeStateNonce :: Maybe AcmeJwsNonce
-  , acmeStateJwkPrivate :: JWK
-  , acmeStateJwkPublic :: JWK
-  , acmeStateKid :: Maybe URL
-  , acmeStateHttpManager :: Network.HTTP.Client.Manager
-  }
+parseURL :: String -> Maybe URL
+parseURL x = do
+  u <- parseURI x
+  if isValidURL u
+    then return (URL u)
+    else Nothing
 
-type URL = URI
+urlToString :: URL -> String
+urlToString (URL u) = show u
 
 -- * ACME Directory
 {-|
@@ -40,7 +41,7 @@ data AcmeObjDirectory = AcmeObjDirectory
 Metadata relating to the service provided by the ACME server
 -}
 data AcmeDirectoryMeta = AcmeDirectoryMeta
-  { acmeDirectoryMetaTermsOfService :: Maybe URL
+  { acmeDirectoryMetaTermsOfService :: Maybe URI
   , acmeDirectoryMetaWebsite :: Maybe URL
   , acmeDirectoryMetaCaaIdentities :: Maybe [HostName]
   } deriving (Show)
@@ -58,8 +59,11 @@ data AcmeObjAccount = AcmeObjAccount
 data AcmeObjStubAccount = AcmeObjStubAccount
   { acmeObjStubAccountContact :: Maybe [String]
   , acmeObjStubAccountTermsOfServiceAgreed :: Maybe Bool
-  , acmeObjStubAccountOnlyReturnExisting :: Maybe URI
+  , acmeObjStubAccountOnlyReturnExisting :: Maybe Bool
   } deriving (Show)
+
+instance Default AcmeObjStubAccount where
+  def = AcmeObjStubAccount Nothing Nothing Nothing
 
 -- ** New Account
 -- ** Retrive URI
@@ -130,30 +134,29 @@ newtype AcmeJwsNonce =
 -- * ACME Order
 -- ** New order
 -- | new-order
+data AcmeObjNewOrder = AcmeObjNewOrder
+  { acmeObjNewOrderIdentifiers :: [AcmeObjIdentifier]
+  , acmeObjNewOrderNotBefore :: Maybe ZonedTime
+  , acmeObjNewOrderNotAfter :: Maybe ZonedTime
+  } deriving (Show)
+
 data AcmeObjOrder = AcmeObjOrder
-  { acmeObjOrderIdentifiers :: [AcmeObjIdentifier]
+  { acmeObjOrderAuthorizations :: [URL]
   , acmeObjOrderNotBefore :: Maybe ZonedTime
   , acmeObjOrderNotAfter :: Maybe ZonedTime
+  , acmeObjOrderIdentifiers :: [AcmeObjIdentifier]
+  , acmeObjOrderFinalize :: URL
+  , acmeObjOrderCertificate :: Maybe URL
   } deriving (Show)
 
---acmeObjOrderCsr :: Base64Octets
-data AcmeObjOrderStatus = AcmeObjOrderStatus
-  { acmeObjOrderStatusAuthorizations :: [URL]
-  , acmeObjOrderStatusNotBefore :: Maybe ZonedTime
-  , acmeObjOrderStatusNotAfter :: Maybe ZonedTime
-  , acmeObjOrderStatusIdentifiers :: [AcmeObjIdentifier]
-  , acmeObjOrderStatusFinalize :: URL
-  , acmeObjOrderStatusCertificate :: Maybe URL
-  } deriving (Show)
-
-data AcmeObjFinalize = AcmeObjFinalize
-  { acmeObjFinalizeCsr :: Base64Octets
+data AcmeObjFinalizeOrder = AcmeObjFinalizeOrder
+  { acmeObjFinalizeOrderCsr :: Base64Octets
   } deriving (Show)
 
 -- * ACME Certificate
-data AcmeObjCertificateRevoke = AcmeObjCertificateRevoke
-  { acmeObjCertificateRevokeCertificate :: Base64Octets
-  , acmeObjCertificateRevokeReason :: Maybe Int
+data AcmeObjRevokeCertificate = AcmeObjRevokeCertificate
+  { acmeObjRevokeCertificateCertificate :: Base64Octets
+  , acmeObjRevokeCertificateReason :: Maybe Int
   } deriving (Show)
 
 -- | Problem Details for HTTP APIs
@@ -175,15 +178,15 @@ concat <$>
   , ''AcmeObjAccount
   , ''AcmeObjAccountKeyRollover
   , ''AcmeObjAuthorization
-  , ''AcmeObjCertificateRevoke
+  , ''AcmeObjRevokeCertificate
   , ''AcmeObjChallenge
   , ''AcmeObjChallengeResponse
   , ''AcmeObjDirectory
-  , ''AcmeObjFinalize
+  , ''AcmeObjFinalizeOrder
   , ''AcmeObjIdentifier
   , ''AcmeObjNewAuthorization
+  , ''AcmeObjNewOrder
   , ''AcmeObjOrder
-  , ''AcmeObjOrderStatus
   , ''AcmeObjStubAccount
   , ''ProblemDetail
   ]

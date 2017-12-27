@@ -27,12 +27,14 @@ library
     Network.ACME.HTTP
     Network.ACME.Internal
     Network.ACME.JWS
-    Network.ACME.Types
+    Network.ACME.Object
+    Network.ACME.Type
   build-depends:
     base >=4.8 && <4.10,
     aeson,
     bytestring,
     case-insensitive,
+    data-default-class,
     http-client,
     http-client-tls >= 0.3.5,
     http-conduit,
