@@ -39,6 +39,11 @@ toAcmeRequestBody pre = genericToJSON (acmeJSONoptions pre)
 toAcmeConfigStore :: (Generic a, GToJSON Zero (Rep a)) => String -> a -> Value
 toAcmeConfigStore = toAcmeRequestBody
 
+secondsToMicroseconds :: Num a => a -> a
+secondsToMicroseconds = (*) 1000000
+
+-- | ACME only allows transport via HTTPS. Therefore the URL type is limited
+-- To the @https:@ URI scheme.
 data URL =
   URL URI
   deriving (Show)

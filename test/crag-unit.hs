@@ -9,7 +9,7 @@ import Data.Maybe
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import Network.ACME
+import Network.ACME.JWS
 
 main :: IO ()
 main = defaultMain tests

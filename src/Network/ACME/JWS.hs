@@ -24,7 +24,7 @@ import Control.Exception (throw)
 
 --import Control.Lens       (Identity(..), Lens', view, review, set, (&), (?~), at)
 import Control.Lens (Identity(..), review, set, view)
-import Control.Monad.Trans.Except
+import Control.Monad.Except
 import Crypto.JOSE
 import Crypto.JOSE.Types (Base64Octets(..))
 import Data.Aeson

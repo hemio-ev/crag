@@ -45,7 +45,7 @@ library
     network,
     network-uri,
     time,
-    transformers,
+    mtl,
     template-haskell,
     x509
   hs-source-dirs:      src
@@ -100,9 +100,12 @@ test-suite crag-integration
     http-types,
     network,
     network-uri,
-    transformers,
+    mtl,
     yaml,
+    -- temp, should be removed
+    jose,
     -- test
+    monad-loops,
     file-embed,
     tasty,
     tasty-hunit,

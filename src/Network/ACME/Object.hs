@@ -1,6 +1,6 @@
 module Network.ACME.Object
-  ( URL
-  , module Network.ACME.Object
+  ( module Network.ACME.Object
+  , URL
   ) where
 
 import Crypto.JOSE (JWK)
@@ -12,17 +12,7 @@ import Network.URI (URI, parseURI)
 
 import Network.ACME.Internal
 
-parseURL :: String -> Maybe URL
-parseURL x = do
-  u <- parseURI x
-  if isValidURL u
-    then return (URL u)
-    else Nothing
-
-urlToString :: URL -> String
-urlToString (URL u) = show u
-
--- * ACME Directory
+-- * Directory
 {-|
 In order to help clients configure themselves with the right URIs for
 each ACME operation, ACME servers provide a directory object.
@@ -46,9 +36,8 @@ data AcmeDirectoryMeta = AcmeDirectoryMeta
   , acmeDirectoryMetaCaaIdentities :: Maybe [HostName]
   } deriving (Show)
 
--- | Directory
--- * ACME Accounts
--- | ACME account
+-- * Account
+-- | Account
 data AcmeObjAccount = AcmeObjAccount
   { acmeObjAccountStatus :: String
   , acmeObjAccountContact :: Maybe [String]
@@ -56,6 +45,8 @@ data AcmeObjAccount = AcmeObjAccount
   , acmeObjAccountOrders :: Maybe URI
   } deriving (Show)
 
+-- ** New Account
+-- | Stub account needed for account creation or inquire
 data AcmeObjStubAccount = AcmeObjStubAccount
   { acmeObjStubAccountContact :: Maybe [String]
   , acmeObjStubAccountTermsOfServiceAgreed :: Maybe Bool
@@ -65,16 +56,47 @@ data AcmeObjStubAccount = AcmeObjStubAccount
 instance Default AcmeObjStubAccount where
   def = AcmeObjStubAccount Nothing Nothing Nothing
 
--- ** New Account
--- ** Retrive URI
--- ** Update
--- ** Key Rollover
+-- ** Account key roll-over
 data AcmeObjAccountKeyRollover = AcmeObjAccountKeyRollover
-  { acmeObjAccountKeyRolloverNewKey :: JWK
-  , acmeObjAccountKeyRolloverAccount :: Maybe URL
+  { acmeObjAccountKeyRolloverAccount :: URL
+  , acmeObjAccountKeyRolloverNewKey :: JWK
+  -- ^ New key
   } deriving (Show)
 
--- * ACME Authorization
+-- * Order
+data AcmeObjOrder = AcmeObjOrder
+  { acmeObjOrderStatus :: String
+  , acmeObjOrderIdentifiers :: [AcmeObjIdentifier]
+  , acmeObjOrderExpires :: Maybe ZonedTime
+  , acmeObjOrderNotBefore :: Maybe ZonedTime
+  , acmeObjOrderNotAfter :: Maybe ZonedTime
+  , acmeObjOrderError :: Maybe ProblemDetail
+  , acmeObjOrderAuthorizations :: [URL]
+  , acmeObjOrderFinalize :: URL
+  , acmeObjOrderCertificate :: Maybe URL
+  } deriving (Show)
+
+-- ** New Order
+-- | new-order
+data AcmeObjNewOrder = AcmeObjNewOrder
+  { acmeObjNewOrderIdentifiers :: [AcmeObjIdentifier]
+  , acmeObjNewOrderNotBefore :: Maybe ZonedTime
+  , acmeObjNewOrderNotAfter :: Maybe ZonedTime
+  } deriving (Show)
+
+-- ** Identifier
+-- | Identifier (original ACME standard only supports type /dns/)
+data AcmeObjIdentifier = AcmeObjIdentifier
+  { acmeObjIdentifierType :: String
+  , acmeObjIdentifierValue :: String
+  } deriving (Show)
+
+-- ** Finalize Order
+data AcmeObjFinalizeOrder = AcmeObjFinalizeOrder
+  { acmeObjFinalizeOrderCsr :: Base64Octets
+  } deriving (Show)
+
+-- * Authorization
 -- | Authorization
 data AcmeObjAuthorization = AcmeObjAuthorization
   { acmeObjAuthorizationIdentifier :: AcmeObjIdentifier
@@ -84,30 +106,7 @@ data AcmeObjAuthorization = AcmeObjAuthorization
   , acmeObjAuthorizationChallenges :: [AcmeObjChallenge]
   } deriving (Show)
 
--- | Authorization identifier (usually Domain)
-data AcmeObjIdentifier = AcmeObjIdentifier
-  { acmeObjIdentifierType :: String
-  , acmeObjIdentifierValue :: String
-  } deriving (Show)
-
--- ** New Authorizations
--- | New authorization
-data AcmeObjNewAuthorization = AcmeObjNewAuthorization
-  { acmeObjNewAuthorizationIdentifier :: AcmeObjIdentifier
-  , acmeObjNewAuthorizationExisting :: Maybe String
-  } deriving (Show)
-
-acmeNewDnsAuthz :: HostName -> AcmeObjNewAuthorization
-acmeNewDnsAuthz domain =
-  AcmeObjNewAuthorization
-  { acmeObjNewAuthorizationIdentifier =
-      AcmeObjIdentifier
-      {acmeObjIdentifierType = "dns", acmeObjIdentifierValue = domain}
-  , acmeObjNewAuthorizationExisting = Nothing
-  }
-
--- Existing Authorizations
--- * ACME Challenges
+-- ** Challenge
 data AcmeObjChallenge = AcmeObjChallenge
   { acmeObjChallengeType :: String
   , acmeObjChallengeUrl :: URL
@@ -117,6 +116,7 @@ data AcmeObjChallenge = AcmeObjChallenge
   , acmeObjChallengeToken :: String
   } deriving (Show)
 
+-- ** Challenge Response
 data AcmeObjChallengeResponse = AcmeObjChallengeResponse
   { acmeObjChallengeResponseKeyAuthorization :: AcmeKeyAuthorization
   } deriving (Show)
@@ -125,40 +125,19 @@ data AcmeKeyAuthorization =
   AcmeKeyAuthorization String
   deriving (Show)
 
--- * ACME Nonce
+-- * Nonce
 -- | Nonce
 newtype AcmeJwsNonce =
   AcmeJwsNonce String
   deriving (Show)
 
--- * ACME Order
--- ** New order
--- | new-order
-data AcmeObjNewOrder = AcmeObjNewOrder
-  { acmeObjNewOrderIdentifiers :: [AcmeObjIdentifier]
-  , acmeObjNewOrderNotBefore :: Maybe ZonedTime
-  , acmeObjNewOrderNotAfter :: Maybe ZonedTime
-  } deriving (Show)
-
-data AcmeObjOrder = AcmeObjOrder
-  { acmeObjOrderAuthorizations :: [URL]
-  , acmeObjOrderNotBefore :: Maybe ZonedTime
-  , acmeObjOrderNotAfter :: Maybe ZonedTime
-  , acmeObjOrderIdentifiers :: [AcmeObjIdentifier]
-  , acmeObjOrderFinalize :: URL
-  , acmeObjOrderCertificate :: Maybe URL
-  } deriving (Show)
-
-data AcmeObjFinalizeOrder = AcmeObjFinalizeOrder
-  { acmeObjFinalizeOrderCsr :: Base64Octets
-  } deriving (Show)
-
--- * ACME Certificate
+-- * Certificate Revokation
 data AcmeObjRevokeCertificate = AcmeObjRevokeCertificate
   { acmeObjRevokeCertificateCertificate :: Base64Octets
   , acmeObjRevokeCertificateReason :: Maybe Int
   } deriving (Show)
 
+-- * Problem Detail (Error)
 -- | Problem Details for HTTP APIs
 -- (<https://tools.ietf.org/html/rfc7807 RFC 7807>)
 data ProblemDetail = ProblemDetail
@@ -168,6 +147,17 @@ data ProblemDetail = ProblemDetail
   , problemDetailDetail :: Maybe String
   , problemDetailInstance :: Maybe URI
   } deriving (Show)
+
+-- * URL
+parseURL :: String -> Maybe URL
+parseURL x = do
+  u <- parseURI x
+  if isValidURL u
+    then return (URL u)
+    else Nothing
+
+urlToString :: URL -> String
+urlToString (URL u) = show u
 
 concat <$>
   mapM
@@ -184,7 +174,6 @@ concat <$>
   , ''AcmeObjDirectory
   , ''AcmeObjFinalizeOrder
   , ''AcmeObjIdentifier
-  , ''AcmeObjNewAuthorization
   , ''AcmeObjNewOrder
   , ''AcmeObjOrder
   , ''AcmeObjStubAccount

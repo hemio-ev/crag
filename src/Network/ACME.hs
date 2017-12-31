@@ -1,115 +1,129 @@
 module Network.ACME
   ( module Network.ACME
-  , module X
+  , acmePerformFindAccountURL
+  , evalCragT
   ) where
 
+import Control.Concurrent (threadDelay)
 import Control.Exception.Lifted (throw, try)
 import Control.Monad (msum, void)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.State (gets)
+import Control.Monad.Reader (asks)
 import Crypto.JOSE (KeyMaterialGenParam(RSAGenParam), genJWK)
 import Data.Default.Class (def)
+import Data.Maybe (fromMaybe)
+import qualified Data.X509 as X509
+import Network.HTTP.Client (Manager)
+import Network.HTTP.Client.TLS (newTlsManager)
 import Network.Socket (HostName)
 
---import Data.Aeson.Types (emptyObject)
---import Data.Foldable
-import Data.Maybe
-import qualified Data.X509 as X509
-import Network.HTTP.Client (Manager) -- defaultManagerSettings
-import Network.HTTP.Client.TLS (newTlsManager)
-
-import Network.ACME.Errors as X
+import Network.ACME.Errors
 import Network.ACME.HTTP
-import Network.ACME.JWS as X
-import Network.ACME.Object as X
+import Network.ACME.Internal (secondsToMicroseconds)
+import Network.ACME.JWS
+import Network.ACME.Object
 import Network.ACME.Type
 
 -- * Perform Requests
 -- ** Directory
-acmePerformState :: URL -> JWK -> IO AcmeState
-acmePerformState vUrl vJwk = do
+acmePerformRunner :: CragConfig -> IO (CragReader, CragState)
+acmePerformRunner cfg = do
   manager <- newTlsManager
-  acmePerformState' manager vUrl vJwk
+  acmePerformRunner' manager cfg
 
-acmePerformState' :: Manager -> URL -> JWK -> IO AcmeState
-acmePerformState' manager vUrl vJwk = do
-  res <- acmePerformDirectory vUrl manager
+acmePerformRunner' :: Manager -> CragConfig -> IO (CragReader, CragState)
+acmePerformRunner' manager cfg = do
+  res <- acmePerformDirectory (cragConfigDirectoryURL cfg) manager
   return
-    AcmeState
-    { acmeStateDirectory = res
-    , acmeStateNonce = Nothing
-    , acmeStateJwkPrivate = vJwk
-    , acmeStateJwkPublic = jwkPublic vJwk
-    , acmeStateKid = Nothing
-    , acmeStateHttpManager = manager
-    }
+    ( CragReader
+        cfg
+        CragSetup
+        { cragSetupJwkPublic = jwkPublic (cragConfigJwk cfg)
+        , cragSetupHttpManager = manager
+        }
+    , CragState
+      { cragStateDirectory = res
+      , cragStateNonce = Nothing
+      , cragStateKid = Nothing
+      })
 
 -- ** Account
 -- | Account Creation (Registration)
-acmePerformCreateAccount :: AcmeObjStubAccount -> AcmeT AcmeObjAccount
+acmePerformCreateAccount :: AcmeObjStubAccount -> CragT AcmeObjAccount
 acmePerformCreateAccount stubAcc =
   resBody <$> acmeHttpJwsPostNewAccount AcmeDirectoryRequestNewAccount stubAcc
 
--- | Finding an Account URL Given a Key
-acmePerformFindAccountURL :: AcmeT URL
-acmePerformFindAccountURL = do
-  res <-
-    acmeHttpJwsPostNewAccount
-      AcmeDirectoryRequestNewAccount
-      def {acmeObjStubAccountOnlyReturnExisting = Just True}
-  lift $ resHeaderAsURL "Location" res
-
 -- | Account Update
-acmePerformUpdateAccount :: AcmeObjAccount -> AcmeT AcmeObjAccount
+acmePerformUpdateAccount :: AcmeObjAccount -> CragT AcmeObjAccount
 acmePerformUpdateAccount newAcc = do
   url <- acmePerformFindAccountURL
   resBody <$> acmeHttpJwsPostUrl url newAcc
 
 -- | Key Roll-over
 acmePerformAccountKeyRollover ::
-     JWK -- ^ Account with current key
-  -> JWK -- ^ Same account with new key
-  -> AcmeT AcmeObjAccount
-acmePerformAccountKeyRollover current _
-  --accUrl <- acmePerformFindAccountURL
-  --let objRollover = AcmeObjAccountKeyRollover (jwkPublic new) (Just accUrl)
-  --innerJws <- return current -- acmeNewJwsBody req objRollover new
- = do
-  let innerJws = current
-  resBody <$> acmeHttpJwsPost AcmeDirectoryRequestKeyChange innerJws
+     JWK -- ^ New key
+  -> CragT AcmeObjAccount
+acmePerformAccountKeyRollover newJWK = do
+  accURL <- acmePerformFindAccountURL
+  let obj = AcmeObjAccountKeyRollover accURL newJWK
+  resBody <$> acmeHttpJwsPost AcmeDirectoryRequestKeyChange obj
 
 -- ** Certificate
 -- | Create new application (handing in a certificate request)
-acmePerformNewOrder :: AcmeObjNewOrder -> AcmeT AcmeObjOrder
-acmePerformNewOrder ord =
-  resBody <$> acmeHttpJwsPost AcmeDirectoryRequestNewOrder ord
+acmePerformNewOrder :: AcmeObjNewOrder -> CragT (URL, AcmeObjOrder)
+acmePerformNewOrder ord = do
+  res <- acmeHttpJwsPost AcmeDirectoryRequestNewOrder ord
+  loc <- resHeaderAsURL "Location" res
+  return (loc, resBody res)
   -- :: X509.SignedCertificate
 
-{-  
-  return $ decodeCert $ getResponseBody res
+acmePerformGetOrder :: URL -> CragT AcmeObjOrder
+acmePerformGetOrder url = resBody <$> acmeHttpGet url
+
+acmePerformWaitUntilOrderValid :: URL -> CragT AcmeObjOrder
+acmePerformWaitUntilOrderValid url = poll
   where
-    decodeCert b =
-      case X509.decodeSignedCertificate (L.toStrict b) of
-        Right c -> c
-        Left e -> throw (AcmeErrDecodingX509 e (show b))
--}
+    poll = do
+      ord <- acmePerformGetOrder url
+      case acmeObjOrderStatus ord of
+        "pending" -> retry poll
+        "processing" -> retry poll
+        "valid" -> return ord
+        s -> error $ "state not good: " ++ s
+
+acmePerformWaitUntilAuthorizationValid :: URL -> CragT AcmeObjAuthorization
+acmePerformWaitUntilAuthorizationValid url = poll
+  where
+    poll = do
+      ord <- acmePerformGetAuthorization url
+      case acmeObjAuthorizationStatus ord of
+        "pending" -> retry poll
+        "processing" -> retry poll
+        "valid" -> return ord
+        s -> error $ "state not good: " ++ s
+
+retry :: CragT a -> CragT a
+retry poll = do
+  i <- asks (cragConfigPollingInterval . cragConfig)
+  liftIO $ threadDelay (secondsToMicroseconds i)
+  poll
+
 -- ** Authorization
-acmePerformGetAuthorizations :: AcmeObjOrder -> AcmeT [AcmeObjAuthorization]
+acmePerformGetAuthorizations :: AcmeObjOrder -> CragT [AcmeObjAuthorization]
 acmePerformGetAuthorizations =
   mapM acmePerformGetAuthorization . acmeObjOrderAuthorizations
 
-acmePerformGetAuthorization :: URL -> AcmeT AcmeObjAuthorization
+acmePerformGetAuthorization :: URL -> CragT AcmeObjAuthorization
 acmePerformGetAuthorization url = resBody <$> acmeHttpGet url
 
 type ChallengeResponder a
-   = HostName -> AcmeKeyAuthorization -> (IO () -> AcmeT AcmeObjChallenge) -- ^ Perform challenge response, first argument is rollback
-                                          -> AcmeT a
+   = HostName -> AcmeKeyAuthorization -> (IO () -> CragT AcmeObjChallenge) -- ^ Perform challenge response, first argument is rollback
+                                          -> CragT a
 
 acmePerformChallengeResponses ::
      [(String, ChallengeResponder a)]
   -> [AcmeObjAuthorization]
-  -> AcmeT [a] -- ^ 
+  -> CragT [a] -- ^ 
 acmePerformChallengeResponses fs as = do
   let actions =
         map getF (filter ((== "pending") . acmeObjAuthorizationStatus) as)
@@ -118,7 +132,6 @@ acmePerformChallengeResponses fs as = do
     cs :: AcmeObjAuthorization -> [(String, AcmeObjChallenge)]
     cs a =
       map (\x -> (acmeObjChallengeType x, x)) $ acmeObjAuthorizationChallenges a
-    --g :: AcmeObjAuthorization -> Maybe (String -> String -> IO a, AcmeObjChallenge)
     g a = msum [(,) f . (,) a <$> lookup chType (cs a) | (chType, f) <- fs]
     getF a =
       fromMaybe (throw $ AcmeErrNoFullfillableChallenge (map fst fs) a) (g a)
@@ -128,24 +141,17 @@ acmePerformChallengeResponses fs as = do
           authz = acmeChallengeRespond (acmeObjChallengeUrl ch) argKey
       f argId argKey authz
 
-acmePerformFinalizeOrder :: AcmeObjOrder -> Base64Octets -> AcmeT AcmeObjOrder
+acmePerformFinalizeOrder :: AcmeObjOrder -> Base64Octets -> CragT AcmeObjOrder
 acmePerformFinalizeOrder order =
   acmePerformFinalizeOrder' (acmeObjOrderFinalize order)
 
-acmePerformFinalizeOrder' :: URL -> Base64Octets -> AcmeT AcmeObjOrder
+acmePerformFinalizeOrder' :: URL -> Base64Octets -> CragT AcmeObjOrder
 acmePerformFinalizeOrder' url csr =
   resBody <$> acmeHttpJwsPostUrl url (AcmeObjFinalizeOrder csr)
 
-{-
--- | New authorization
-acmePerformAuthorizationNew ::
-     AcmeObjAuthorizationNew -> AcmeT AcmeObjAuthorization
-acmePerformAuthorizationNew authz =
-  resBody <$> acmeHttpJwsPost AcmeDirectoryRequestNewAuthz authz
--}
 -- | Respond to challenge
 acmeChallengeRespond ::
-     URL -> AcmeKeyAuthorization -> IO () -> AcmeT AcmeObjChallenge
+     URL -> AcmeKeyAuthorization -> IO () -> CragT AcmeObjChallenge
 acmeChallengeRespond req k cleanup = do
   res <- try $ resBody <$> acmeHttpJwsPostUrl req (AcmeObjChallengeResponse k)
   case res of
@@ -154,11 +160,11 @@ acmeChallengeRespond req k cleanup = do
       _ <- liftIO cleanup
       throw (e :: AcmeErr)
 
-acmeChallengeRespond' :: URL -> AcmeKeyAuthorization -> AcmeT AcmeObjChallenge
+acmeChallengeRespond' :: URL -> AcmeKeyAuthorization -> CragT AcmeObjChallenge
 acmeChallengeRespond' req k = acmeChallengeRespond req k (return ())
 
 -- | Revoke
-acmePerformRevokeCertificate :: AcmeObjRevokeCertificate -> AcmeT ()
+acmePerformRevokeCertificate :: AcmeObjRevokeCertificate -> CragT ()
 acmePerformRevokeCertificate obj =
   void (acmeHttpJwsPost AcmeDirectoryRequestRevokeCert obj)
 
@@ -173,6 +179,9 @@ acmeNewObjAccountStub mail = do
       , acmeObjStubAccountTermsOfServiceAgreed = Just True
       }
     , keyMat)
+
+acmeNewJWK :: IO JWK
+acmeNewJWK = genJWK (RSAGenParam 256)
 
 acmeNewObjOrder :: [String] -> AcmeObjNewOrder
 acmeNewObjOrder xs =
@@ -195,31 +204,22 @@ acmeNewObjRevokeCertificate crt =
   , acmeObjRevokeCertificateReason = Nothing
   }
 
-{-
--- ** Object inquiry 
-acmeGetPendingChallenge ::
-     String -- ^ Type
-  -> AcmeObjAuthorization
-  -> AcmeObjChallenge
-acmeGetPendingChallenge t =
-  fromMaybe (throw $ AcmeErrNoChallenge t) . acmeMaybePendingChallenge t
-
-acmeMaybePendingChallenge ::
-     String -- ^ Type
-  -> AcmeObjAuthorization
-  -> Maybe AcmeObjChallenge
-acmeMaybePendingChallenge t authz =
-  find cond (acmeObjAuthorizationChallenges authz)
-  where
-    cond x =
-      acmeObjChallengeStatus x == "pending" && acmeObjChallengeType x == t
--}
 -- ** Other
 -- | keyAuthorization for a given challenge
-acmeKeyAuthorization :: AcmeObjChallenge -> AcmeT AcmeKeyAuthorization
+acmeKeyAuthorization :: AcmeObjChallenge -> CragT AcmeKeyAuthorization
 acmeKeyAuthorization ch = do
-  jwk <- gets acmeStateJwkPublic
+  jwk <- asks (cragSetupJwkPublic . cragSetup)
   return . AcmeKeyAuthorization $ acmeKeyAuthorization' ch jwk
+
+keyAuthorization :: AcmeKeyAuthorization -> String
+keyAuthorization (AcmeKeyAuthorization x) = x
+
+keyAuthorizationToken :: AcmeKeyAuthorization -> String
+keyAuthorizationToken = takeWhile (/= '.') . keyAuthorization
+
+keyAuthorizationHttpPath :: AcmeKeyAuthorization -> String
+keyAuthorizationHttpPath x =
+  "/.well-known/acme-challenge/" ++ keyAuthorizationToken x
 
 acmeKeyAuthorization' :: AcmeObjChallenge -> JWK -> String
 acmeKeyAuthorization' ch acc =
