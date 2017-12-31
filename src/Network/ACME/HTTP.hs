@@ -16,7 +16,6 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (asks)
 import Control.Monad.State (gets, modify)
 import Data.Aeson (FromJSON, ToJSON, eitherDecode, encode)
-import Data.Aeson.Types (emptyObject)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.CaseInsensitive (CI, mk)
@@ -48,6 +47,7 @@ import Text.Read (readMaybe)
 import Network.ACME.Errors
 import Network.ACME.JWS
 import Network.ACME.Object
+import Network.ACME.Type
 
 maxRetries :: Int
 maxRetries = 20
