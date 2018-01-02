@@ -18,7 +18,7 @@ import Network.HTTP.Client.TLS (newTlsManager)
 import Network.Socket (HostName)
 
 import Network.ACME.Errors
-import Network.ACME.HTTP
+import Network.ACME.HTTPS
 import Network.ACME.Internal (secondsToMicroseconds)
 import Network.ACME.JWS
 import Network.ACME.Object

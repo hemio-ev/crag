@@ -24,7 +24,8 @@ library
   exposed-modules:
     Network.ACME
     Network.ACME.Errors
-    Network.ACME.HTTP
+    Network.ACME.HTTPS
+    Network.ACME.HTTPS.Internal
     Network.ACME.Internal
     Network.ACME.JWS
     Network.ACME.Object
@@ -37,7 +38,6 @@ library
     data-default-class,
     http-client,
     http-client-tls >= 0.3.5,
-    http-conduit,
     http-types,
     jose >= 0.6,
     lens,

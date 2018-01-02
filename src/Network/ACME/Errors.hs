@@ -10,6 +10,13 @@ import Network.HTTP.Types
 
 type JwsError = Error
 
+errBadNonce :: AcmeErr -> Bool
+errBadNonce AcmeErrDetail {acmeErrProblemDetail = d}
+  | (show <$> problemDetailType d) == Just "urn:ietf:params:acme:error:badNonce" =
+    True
+  | otherwise = False
+errBadNonce _ = False
+
 data AcmeErr
   -- | Server reported an error with structured details
   = AcmeErrDetail { acmeErrRequest :: URL
