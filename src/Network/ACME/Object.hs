@@ -161,21 +161,21 @@ urlToString (URL u) = show u
 
 concat <$>
   mapM
-  deriveAcmeJSON
-  [ ''AcmeDirectoryMeta
-  , ''AcmeJwsNonce
-  , ''AcmeKeyAuthorization
-  , ''AcmeObjAccount
-  , ''AcmeObjAccountKeyRollover
-  , ''AcmeObjAuthorization
-  , ''AcmeObjRevokeCertificate
-  , ''AcmeObjChallenge
-  , ''AcmeObjChallengeResponse
-  , ''AcmeObjDirectory
-  , ''AcmeObjFinalizeOrder
-  , ''AcmeObjIdentifier
-  , ''AcmeObjNewOrder
-  , ''AcmeObjOrder
-  , ''AcmeObjStubAccount
-  , ''ProblemDetail
-  ]
+    deriveAcmeJSON
+    [ ''AcmeDirectoryMeta
+    , ''AcmeJwsNonce
+    , ''AcmeKeyAuthorization
+    , ''AcmeObjAccount
+    , ''AcmeObjAccountKeyRollover
+    , ''AcmeObjAuthorization
+    , ''AcmeObjRevokeCertificate
+    , ''AcmeObjChallenge
+    , ''AcmeObjChallengeResponse
+    , ''AcmeObjDirectory
+    , ''AcmeObjFinalizeOrder
+    , ''AcmeObjIdentifier
+    , ''AcmeObjNewOrder
+    , ''AcmeObjOrder
+    , ''AcmeObjStubAccount
+    , ''ProblemDetail
+    ]

@@ -74,10 +74,10 @@ newAcmeJwsHeader vUrl vJwkPrivate vJwkPublic vNonce vKid
  -- 'detail: signature type 'PS512' in JWS header is not supported'
  =
   AcmeJwsHeader
-  { _acmeJwsHeader = setAuth $ newJWSHeader (Protected, bestAlg)
-  , _acmeJwsHeaderNonce = vNonce
-  , _acmeJwsHeaderUrl = vUrl
-  }
+    { _acmeJwsHeader = setAuth $ newJWSHeader (Protected, bestAlg)
+    , _acmeJwsHeaderNonce = vNonce
+    , _acmeJwsHeaderUrl = vUrl
+    }
   where
     bestAlg =
       case bestJWSAlg vJwkPrivate of

@@ -91,7 +91,7 @@ resHeaderAsURL x ys = do
     Nothing ->
       throw
         AcmeErrDecodingHeader
-        {acmeErrHeaderName = show x, acmeErrHeaderValue = h}
+          {acmeErrHeaderName = show x, acmeErrHeaderValue = h}
 
 resRetryAfter :: AcmeResponse -> IO (Maybe Int)
 resRetryAfter r = do
@@ -231,15 +231,15 @@ parseResult req bod resIO = do
            Right e ->
              throw
                AcmeErrDetail
-               { acmeErrRequest = req
-               , acmeErrHttpStatus = responseStatus res
-               , acmeErrProblemDetail = e
-               , acmeErrRequestBody = bod
-               }
+                 { acmeErrRequest = req
+                 , acmeErrHttpStatus = responseStatus res
+                 , acmeErrProblemDetail = e
+                 , acmeErrRequestBody = bod
+                 }
            Left msg ->
              throw
                AcmeErrDecodingProblemDetail
-               { acmeErrHttpStatus = responseStatus res
-               , acmeErrMessage = msg
-               , acmeErrResponseBody = L.unpack $ responseBody res
-               }
+                 { acmeErrHttpStatus = responseStatus res
+                 , acmeErrMessage = msg
+                 , acmeErrResponseBody = L.unpack $ responseBody res
+                 }

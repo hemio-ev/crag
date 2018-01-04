@@ -38,14 +38,14 @@ acmePerformRunner' manager cfg = do
     ( CragReader
         cfg
         CragSetup
-        { cragSetupJwkPublic = jwkPublic (cragConfigJwk cfg)
-        , cragSetupHttpManager = manager
-        }
+          { cragSetupJwkPublic = jwkPublic (cragConfigJwk cfg)
+          , cragSetupHttpManager = manager
+          }
     , CragState
-      { cragStateDirectory = res
-      , cragStateNonce = Nothing
-      , cragStateKid = Nothing
-      })
+        { cragStateDirectory = res
+        , cragStateNonce = Nothing
+        , cragStateKid = Nothing
+        })
 
 -- ** Account
 -- | Account Creation (Registration)
@@ -175,9 +175,9 @@ acmeNewObjAccountStub mail = do
   keyMat <- genJWK (RSAGenParam 256)
   return
     ( def
-      { acmeObjStubAccountContact = Just ["mailto:" ++ mail]
-      , acmeObjStubAccountTermsOfServiceAgreed = Just True
-      }
+        { acmeObjStubAccountContact = Just ["mailto:" ++ mail]
+        , acmeObjStubAccountTermsOfServiceAgreed = Just True
+        }
     , keyMat)
 
 acmeNewJWK :: IO JWK
@@ -186,23 +186,23 @@ acmeNewJWK = genJWK (RSAGenParam 256)
 acmeNewObjOrder :: [String] -> AcmeObjNewOrder
 acmeNewObjOrder xs =
   AcmeObjNewOrder
-  { acmeObjNewOrderIdentifiers = map toId xs
-  , acmeObjNewOrderNotBefore = Nothing
-  , acmeObjNewOrderNotAfter = Nothing
-  }
+    { acmeObjNewOrderIdentifiers = map toId xs
+    , acmeObjNewOrderNotBefore = Nothing
+    , acmeObjNewOrderNotAfter = Nothing
+    }
   where
     toId v =
       AcmeObjIdentifier
-      {acmeObjIdentifierType = "dns", acmeObjIdentifierValue = v}
+        {acmeObjIdentifierType = "dns", acmeObjIdentifierValue = v}
 
 acmeNewObjRevokeCertificate ::
      X509.SignedCertificate -> AcmeObjRevokeCertificate
 acmeNewObjRevokeCertificate crt =
   AcmeObjRevokeCertificate
-  { acmeObjRevokeCertificateCertificate =
-      Base64Octets (X509.encodeSignedObject crt)
-  , acmeObjRevokeCertificateReason = Nothing
-  }
+    { acmeObjRevokeCertificateCertificate =
+        Base64Octets (X509.encodeSignedObject crt)
+    , acmeObjRevokeCertificateReason = Nothing
+    }
 
 -- ** Other
 -- | keyAuthorization for a given challenge

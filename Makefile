@@ -26,12 +26,9 @@ pebble-get:
 pebble-install:
 	cd $(PEBBLE_PATH); go install ./...
 
-fixerr:
-	sed -i "s/^mapM$$/  mapM/g" src/Network/ACME/Object.hs
-
-format-code: fixerr $(HS)
-	sed -i "s/^mapM$$/  mapM/" src/Network/ACME/Object.hs
+format-code: $(HS)
 
 $(HS):
-	@./.cabal-sandbox/bin/hlint $@
 	@./.cabal-sandbox/bin/hindent $@
+	@./.cabal-sandbox/bin/hlint $@
+

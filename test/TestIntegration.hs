@@ -120,7 +120,7 @@ newUnsafeTestManager :: IO Manager
 newUnsafeTestManager =
   newManager
     (mkManagerSettings (TLSSettingsSimple True False False) Nothing)
-    {managerResponseTimeout = responseTimeoutMicro 3000000}
+      {managerResponseTimeout = responseTimeoutMicro 3000000}
 
 challengeResponders :: HTTPServerLiveConf -> [(String, ChallengeResponder ())]
 challengeResponders httpServerLiveConf =
@@ -159,8 +159,8 @@ confUrl =
 
 config jwk =
   CragConfig
-  { cragConfigDirectoryURL = confUrl
-  , cragConfigJwk = jwk
-  , cragConfigPollingInterval = 2
-  , cragConfigRateLimitRetryAfter = 2
-  }
+    { cragConfigDirectoryURL = confUrl
+    , cragConfigJwk = jwk
+    , cragConfigPollingInterval = 2
+    , cragConfigRateLimitRetryAfter = 2
+    }

@@ -20,7 +20,7 @@ deriveAcmeJSON n = deriveJSON (acmeJSONoptions (startLower $ nameBase n)) n
 acmeJSONoptions :: String -> Options
 acmeJSONoptions pre =
   defaultOptions
-  {fieldLabelModifier = startLower . withoutPrefix, omitNothingFields = True}
+    {fieldLabelModifier = startLower . withoutPrefix, omitNothingFields = True}
   where
     withoutPrefix str =
       case stripPrefix pre str of

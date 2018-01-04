@@ -71,9 +71,7 @@ test-suite crag-unit
     -- test
     file-embed,
     tasty,
-    tasty-hunit,
-    -- dev
-    hindent
+    tasty-hunit
   ghc-options:
     -Wall
     -Wcompat
@@ -93,34 +91,27 @@ test-suite crag-integration
     aeson,
     bytestring,
     connection,
-    data-default,
+    cryptonite,
     http-client,
     http-client-tls >= 0.3.5,
-    http-conduit,
     http-types,
-    network,
-    network-uri,
     mtl,
+    pem,
+    pem,
+    pkcs10,
+    process,
+    x509,
     yaml,
     -- temp, should be removed
     jose,
     -- test
-    monad-loops,
-    file-embed,
     tasty,
     tasty-hunit,
-    pkcs10,
-    pem,
-    cryptonite,
-    process,
-    x509,
-    pem,
+    -- webserver
     warp,
     wai,
-    -- hindent dep. fix
-    haskell-src-exts < 1.20,
-    -- dev
-    hindent,
+    -- code formatting/quality
+    hindent == 5.2.5.*,
     hlint > 2
   ghc-options:
     -Wall
