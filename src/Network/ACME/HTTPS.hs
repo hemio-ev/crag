@@ -7,6 +7,7 @@ module Network.ACME.HTTPS
   , resHeaderAsURL
   , acmePerformDirectory
   , acmePerformFindAccountURL
+  , parsePEMBody
   ) where
 
 import Network.ACME.HTTPS.Internal

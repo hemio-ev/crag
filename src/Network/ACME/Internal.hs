@@ -3,16 +3,11 @@ module Network.ACME.Internal where
 import Crypto.JOSE.Types ()
 import Data.Aeson
 import Data.Aeson.TH (deriveJSON)
-import Data.Aeson.Types
 import Data.Char
 import Data.List
 import GHC.Generics
 import Language.Haskell.TH.Syntax (Dec, Name, Q, nameBase)
 import Network.URI (URI, uriScheme)
-
-parseAcmeServerResponse ::
-     (Generic a, GFromJSON Zero (Rep a)) => String -> Value -> Parser a
-parseAcmeServerResponse pre = genericParseJSON (acmeJSONoptions pre)
 
 deriveAcmeJSON :: Name -> Q [Dec]
 deriveAcmeJSON n = deriveJSON (acmeJSONoptions (startLower $ nameBase n)) n
@@ -32,12 +27,6 @@ acmeJSONoptions pre =
 startLower :: String -> String
 startLower [] = ""
 startLower (x:xs) = toLower x : xs
-
-toAcmeRequestBody :: (Generic a, GToJSON Zero (Rep a)) => String -> a -> Value
-toAcmeRequestBody pre = genericToJSON (acmeJSONoptions pre)
-
-toAcmeConfigStore :: (Generic a, GToJSON Zero (Rep a)) => String -> a -> Value
-toAcmeConfigStore = toAcmeRequestBody
 
 secondsToMicroseconds :: Num a => a -> a
 secondsToMicroseconds = (*) 1000000

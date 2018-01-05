@@ -79,7 +79,9 @@ testOrderNew =
       mapM_ acmePerformWaitUntilAuthorizationValid $
         acmeObjOrderAuthorizations orderObj
       _ <- acmePerformFinalizeOrder orderObj cert
-      _ <- acmePerformWaitUntilOrderValid orderURL
+      finalOrder <- acmePerformWaitUntilOrderValid orderURL
+      crt <- retrieveCertificate finalOrder
+      liftIO $ putStrLn (concat crt :: String)
       return ()
 
 pebbleResource :: TestTree -> TestTree

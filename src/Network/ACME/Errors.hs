@@ -42,6 +42,7 @@ data AcmeErr
   -- | Expected HTTP status but body has not the expected format
   | AcmeErrDecodingBody { acmeErrMessage :: String
                         , acmeErrBody :: String }
+  | ErrDecodingPEM String
   -- | Unexpected HTTP response status, but response is not a 'ProblemDetail'
   | AcmeErrDecodingProblemDetail { acmeErrHttpStatus :: Status
                                  , acmeErrMessage :: String

@@ -10,8 +10,10 @@ import Control.Monad (msum, void)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (asks)
 import Crypto.JOSE (KeyMaterialGenParam(RSAGenParam), genJWK)
+import qualified Data.ByteString.Char8 as B
 import Data.Default.Class (def)
 import Data.Maybe (fromMaybe)
+import Data.PEM (PEM(PEM), pemWriteBS)
 import qualified Data.X509 as X509
 import Network.HTTP.Client (Manager)
 import Network.HTTP.Client.TLS (newTlsManager)
@@ -107,6 +109,32 @@ retry poll = do
   i <- asks (cragConfigPollingInterval . cragConfig)
   liftIO $ threadDelay (secondsToMicroseconds i)
   poll
+
+class CertificateForm a where
+  fromBytestring :: B.ByteString -> a
+
+instance CertificateForm (X509.SignedExact X509.Certificate) where
+  fromBytestring x =
+    case X509.decodeSignedObject x of
+      Left e -> error e
+      Right v -> v
+
+instance CertificateForm PEM where
+  fromBytestring x =
+    PEM
+      "CERTIFICATE"
+      []
+      (X509.encodeSignedObject (fromBytestring x :: X509.SignedCertificate))
+
+instance CertificateForm String where
+  fromBytestring x = B.unpack $ pemWriteBS (fromBytestring x :: PEM)
+
+retrieveCertificate :: CertificateForm a => AcmeObjOrder -> CragT [a]
+retrieveCertificate o = do
+  crts <-
+    parsePEMBody <$>
+    acmeHttpGet (fromMaybe (error "no cert url") (acmeObjOrderCertificate o))
+  return (map fromBytestring crts)
 
 -- ** Authorization
 acmePerformGetAuthorizations :: AcmeObjOrder -> CragT [AcmeObjAuthorization]

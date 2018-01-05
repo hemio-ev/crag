@@ -10,6 +10,7 @@ import qualified Data.ByteString.Lazy.Char8 as L
 import Data.CaseInsensitive (CI, mk)
 import Data.Default.Class (def)
 import Data.Maybe (fromMaybe)
+import Data.PEM (pemContent, pemParseLBS)
 import Data.Time
   ( UTCTime
   , defaultTimeLocale
@@ -112,6 +113,12 @@ resBody res =
     Right x -> x
     Left msg ->
       throw AcmeErrDecodingBody {acmeErrMessage = msg, acmeErrBody = show res}
+
+parsePEMBody :: AcmeResponse -> [B.ByteString]
+parsePEMBody res =
+  case pemParseLBS (responseBody res) of
+    Left e -> error e --ErrDecodingPEM e
+    Right v -> map pemContent v
 
 -- * State Operations
 acmeTAddNonce :: AcmeResponse -> CragT ()
