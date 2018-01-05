@@ -3,6 +3,7 @@ module TestIntegration
   ) where
 
 import Control.Concurrent (forkIO, threadDelay)
+import Control.Monad.Except
 import Control.Monad.IO.Class (liftIO)
 import Crypto.Hash (SHA512(SHA512))
 import Crypto.PubKey.RSA (generate)
@@ -52,7 +53,7 @@ testNewAccount =
   testCase "Account operations" $ do
     (acc, jwk) <- acmeNewObjAccountStub "email1@example.org"
     manager <- newUnsafeTestManager
-    state <- acmePerformRunner' manager (config jwk)
+    (Right state) <- runExceptT $ acmePerformRunner' manager (config jwk)
     flip evalCragT state $ do
       _ <- acmePerformCreateAccount acc
       url <- acmePerformFindAccountURL
@@ -67,7 +68,7 @@ testOrderNew =
     httpServerLiveConf <- newIORef []
     _ <- forkIO $ myHttpServer httpServerLiveConf
     manager <- newUnsafeTestManager
-    state <- acmePerformRunner' manager (config jwk)
+    (Right state) <- runExceptT $ acmePerformRunner' manager (config jwk)
     res <-
       flip evalCragT state $ do
         let domains = ["localhost"] --, "ip6-localhost", "ip6-loopback"]

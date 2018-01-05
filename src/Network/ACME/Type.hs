@@ -6,20 +6,20 @@ import Control.Monad.State (StateT, runStateT)
 import Crypto.JOSE (JWK)
 import Network.HTTP.Client (Manager)
 
-import Network.ACME.Errors
+import Network.ACME.Error
 import Network.ACME.Object
 
 -- ** Monad Transformer
-type CragT = ExceptT AcmeErr (StateT CragState (ReaderT CragReader IO))
+type CragT = StateT CragState (ReaderT CragReader (ExceptT AcmeErr IO))
 
 runCragT ::
-     CragT a -> (CragReader, CragState) -> IO (Either AcmeErr a, CragState)
-runCragT x (r, s) = (`runReaderT` r) $ (`runStateT` s) $ runExceptT x
+     CragT a -> (CragReader, CragState) -> IO (Either AcmeErr (a, CragState))
+runCragT x (r, s) = runExceptT $ (`runReaderT` r) $ (`runStateT` s) x
 
 evalCragT :: CragT a -> (CragReader, CragState) -> IO (Either AcmeErr a)
 evalCragT x v = do
-  (o, _) <- runCragT x v
-  return o
+  o <- runCragT x v
+  return (fst <$> o)
 
 -- ** Client Configuration
 data CragConfig = CragConfig

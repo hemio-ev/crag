@@ -20,7 +20,7 @@ library
     TemplateHaskell
   exposed-modules:
     Network.ACME
-    Network.ACME.Errors
+    Network.ACME.Error
     Network.ACME.HTTPS
     Network.ACME.HTTPS.Internal
     Network.ACME.Internal
@@ -38,13 +38,12 @@ library
     http-types,
     jose >= 0.6,
     lens,
-    lifted-base,
+    mtl,
     network,
     network-uri,
-    time,
     pem,
-    mtl,
     template-haskell,
+    time,
     x509
   hs-source-dirs:      src
   default-language:    Haskell2010

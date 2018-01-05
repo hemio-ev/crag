@@ -5,7 +5,6 @@ import Data.Aeson
 import Data.Aeson.TH (deriveJSON)
 import Data.Char
 import Data.List
-import GHC.Generics
 import Language.Haskell.TH.Syntax (Dec, Name, Q, nameBase)
 import Network.URI (URI, uriScheme)
 

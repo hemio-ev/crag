@@ -1,6 +1,6 @@
 module Network.ACME.HTTPS.Internal where
 
-import Control.Exception.Lifted (handle, throw)
+import Control.Monad.Except (ExceptT, catchError, lift, throwError)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (asks)
 import Control.Monad.State (gets, modify)
@@ -9,7 +9,6 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.CaseInsensitive (CI, mk)
 import Data.Default.Class (def)
-import Data.Maybe (fromMaybe)
 import Data.PEM (pemContent, pemParseLBS)
 import Data.Time
   ( UTCTime
@@ -39,7 +38,7 @@ import Network.HTTP.Types
   )
 import Text.Read (readMaybe)
 
-import Network.ACME.Errors
+import Network.ACME.Error
 import Network.ACME.JWS
 import Network.ACME.Object
 import Network.ACME.Type
@@ -50,8 +49,9 @@ maxRetries = 20
 
 -- * Operations
 -- | Get all supported resources from server
-acmePerformDirectory :: URL -> Manager -> IO AcmeObjDirectory
-acmePerformDirectory acmeReq manager = resBody <$> acmeHttpGet' acmeReq manager
+acmePerformDirectory :: URL -> Manager -> ExceptT AcmeErr IO AcmeObjDirectory
+acmePerformDirectory acmeReq manager =
+  resBody' =<< liftIO (acmeHttpGet' acmeReq manager)
 
 -- | Get new nonce
 acmePerformNonce :: CragT AcmeJwsNonce
@@ -90,7 +90,7 @@ resHeaderAsURL x ys = do
   case parseURL h of
     Just u -> return u
     Nothing ->
-      throw
+      throwError
         AcmeErrDecodingHeader
           {acmeErrHeaderName = show x, acmeErrHeaderValue = h}
 
@@ -107,12 +107,16 @@ resRetryAfter r = do
 parseHttpTime :: String -> Maybe UTCTime
 parseHttpTime = parseTimeM True defaultTimeLocale "%a, %d %b %0Y %T GMT"
 
-resBody :: FromJSON a => AcmeResponse -> a
-resBody res =
+resBody :: FromJSON a => AcmeResponse -> CragT a
+resBody res = lift . lift $ resBody' res
+
+resBody' :: FromJSON a => AcmeResponse -> ExceptT AcmeErr IO a
+resBody' res =
   case eitherDecode (responseBody res) of
-    Right x -> x
+    Right x -> return x
     Left msg ->
-      throw AcmeErrDecodingBody {acmeErrMessage = msg, acmeErrBody = show res}
+      throwError
+        AcmeErrDecodingBody {acmeErrMessage = msg, acmeErrBody = show res}
 
 parsePEMBody :: AcmeResponse -> [B.ByteString]
 parsePEMBody res =
@@ -140,7 +144,7 @@ acmeTGetNonce = do
 acmeDictionaryUrl :: AcmeDirectoryRequest -> CragT URL
 acmeDictionaryUrl req = do
   url <- gets (acmeRequestUrl req . cragStateDirectory)
-  return $ fromMaybe (throw $ AcmeErrRequestNotSupported req) url
+  maybe (throwError $ AcmeErrRequestNotSupported req) return url
 
 -- * Perform HTTPS
 acmeHttpJwsPostNewAccount ::
@@ -164,8 +168,8 @@ acmeHttpJwsPost' retried withKid url bod = do
   nonce <- acmeTGetNonce
   vJwkPublic <- asks (cragSetupJwkPublic . cragSetup)
   vJwkPrivate <- asks (cragConfigJwk . cragConfig)
-  req <- liftIO $ acmeNewJwsBody bod url vJwkPrivate vJwkPublic nonce vKid
-  res <- handle handler $ acmeHttpPost url req
+  req <- lift . lift $ acmeNewJwsBody bod url vJwkPrivate vJwkPublic nonce vKid
+  res <- catchError (acmeHttpPost url req) handler
   acmeTAddNonce res
   return res
   where
@@ -174,8 +178,8 @@ acmeHttpJwsPost' retried withKid url bod = do
       | errBadNonce e || retried >= maxRetries = do
         acmeTSetNonce Nothing
         acmeHttpJwsPost' (retried + 1) withKid url bod
-      | otherwise = throw e
-    handler e = throw e
+      | otherwise = throwError e
+    handler e = throwError e
     accURL :: CragT (Maybe URL)
     accURL
       | withKid = Just <$> acmePerformFindAccountURL
@@ -236,7 +240,7 @@ parseResult req bod resIO = do
     then return res
     else case eitherDecode (responseBody res) of
            Right e ->
-             throw
+             throwError
                AcmeErrDetail
                  { acmeErrRequest = req
                  , acmeErrHttpStatus = responseStatus res
@@ -244,7 +248,7 @@ parseResult req bod resIO = do
                  , acmeErrRequestBody = bod
                  }
            Left msg ->
-             throw
+             throwError
                AcmeErrDecodingProblemDetail
                  { acmeErrHttpStatus = responseStatus res
                  , acmeErrMessage = msg

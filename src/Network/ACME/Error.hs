@@ -1,9 +1,8 @@
-module Network.ACME.Errors where
+module Network.ACME.Error where
 
 import Crypto.JOSE
 import qualified Data.ByteString.Lazy.Char8 as L
 
-import Control.Exception
 import Network.ACME.Object
 import Network.HTTP.Client
 import Network.HTTP.Types
@@ -56,8 +55,6 @@ data AcmeErr
   -- | Expected HTTP header not found
   | AcmeErrHeaderNotFound HeaderName
   deriving (Show)
-
-instance Exception AcmeErr
 
 data AcmeDirectoryRequest
   = AcmeDirectoryRequestRevokeCert
