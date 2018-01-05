@@ -8,6 +8,7 @@ import Crypto.Hash (SHA512(SHA512))
 import Crypto.PubKey.RSA (generate)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
+import Data.Either (isRight)
 import Data.IORef
 import Data.Maybe (fromJust, fromMaybe)
 import Data.PEM (pemWriteBS)
@@ -67,22 +68,17 @@ testOrderNew =
     _ <- forkIO $ myHttpServer httpServerLiveConf
     manager <- newUnsafeTestManager
     state <- acmePerformRunner' manager (config jwk)
-    flip evalCragT state $ do
-      let domains = ["localhost"] --, "ip6-localhost", "ip6-loopback"]
-      csr <- liftIO $ newCrt domains
-      let cert = Base64Octets csr
-      _ <- acmePerformCreateAccount accStub
-      (orderURL, orderObj) <- acmePerformNewOrder (acmeNewObjOrder domains)
-      _ <-
-        acmePerformGetAuthorizations orderObj >>=
-        acmePerformChallengeResponses (challengeResponders httpServerLiveConf)
-      mapM_ acmePerformWaitUntilAuthorizationValid $
-        acmeObjOrderAuthorizations orderObj
-      _ <- acmePerformFinalizeOrder orderObj cert
-      finalOrder <- acmePerformWaitUntilOrderValid orderURL
-      crt <- retrieveCertificate finalOrder
-      liftIO $ putStrLn (concat crt :: String)
-      return ()
+    res <-
+      flip evalCragT state $ do
+        let domains = ["localhost"] --, "ip6-localhost", "ip6-loopback"]
+        csr <- liftIO $ newCrt domains
+        let cert = Base64Octets csr
+        _ <- acmePerformCreateAccount accStub
+        crt <-
+          obtainCertificate domains cert (challengeReactions httpServerLiveConf)
+        liftIO $ putStrLn (concat crt :: String)
+        return ()
+    isRight res @?= True
 
 pebbleResource :: TestTree -> TestTree
 pebbleResource = withResource pebbleProcess terminateProcess . const
@@ -124,18 +120,25 @@ newUnsafeTestManager =
     (mkManagerSettings (TLSSettingsSimple True False False) Nothing)
       {managerResponseTimeout = responseTimeoutMicro 3000000}
 
-challengeResponders :: HTTPServerLiveConf -> [(String, ChallengeResponder ())]
-challengeResponders httpServerLiveConf =
-  [ ( "http-01"
-    , \host keyauth c -> do
-        let requestId = (host, keyAuthorizationHttpPath keyauth)
-        liftIO $
-          addResponse (requestId, keyAuthorization keyauth) httpServerLiveConf
-        liftIO $ putStrLn "responded"
-        -- submit challenge without rollback thing
-        _ <- c $ removeResponse requestId httpServerLiveConf
-        liftIO $ putStrLn "submitted")
+challengeReactions :: HTTPServerLiveConf -> [(String, ChallengeReaction)]
+challengeReactions httpServerLiveConf =
+  [ ( http01
+    , ChallengeReaction
+        { fulfill =
+            \identifier keyAuthz -> do
+              addResponse
+                (requestId identifier keyAuthz, keyAuthorization keyAuthz)
+                httpServerLiveConf
+              putStrLn "responded"
+        , rollback =
+            \identifier keyAuthz -> do
+              removeResponse (requestId identifier keyAuthz) httpServerLiveConf
+              putStrLn "removed"
+        })
   ]
+  where
+    requestId identifier keyAuthz =
+      (acmeObjIdentifierValue identifier, keyAuthorizationHttpPath keyAuthz)
 
 newCrt :: [String] -> IO B.ByteString
 newCrt domains = do

@@ -7,12 +7,13 @@ module Network.ACME
 import Control.Concurrent (threadDelay)
 import Control.Exception.Lifted (throw, try)
 import Control.Monad (msum, void)
+import Control.Monad.Except (throwError)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (asks)
 import Crypto.JOSE (KeyMaterialGenParam(RSAGenParam), genJWK)
 import qualified Data.ByteString.Char8 as B
 import Data.Default.Class (def)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, listToMaybe)
 import Data.PEM (PEM(PEM), pemWriteBS)
 import qualified Data.X509 as X509
 import Network.HTTP.Client (Manager)
@@ -27,6 +28,37 @@ import Network.ACME.Object
 import Network.ACME.Type
 
 -- * Perform Requests
+-- **
+http01 :: String
+http01 = "http-01"
+
+dns01 :: String
+dns01 = "dns-01"
+
+tlsSni02 :: String
+tlsSni02 = "tls-sni-02"
+
+obtainCertificate ::
+     CertificateForm a
+  => [String] -- ^ domains
+  -> Base64Octets -- ^ CSR
+  -> [(String, ChallengeReaction)] -- Challenge reactions
+  -> CragT [a]
+obtainCertificate domains cert reactions = do
+  (orderURL, orderObj) <- acmePerformNewOrder (acmeNewObjOrder domains)
+  _ <-
+    acmePerformGetAuthorizations orderObj >>=
+    acmePerformChallengeReaction reactions
+  -- wait until server has validated
+  mapM_ acmePerformWaitUntilAuthorizationValid $
+    acmeObjOrderAuthorizations orderObj
+  -- finalize: submit CSR
+  _ <- acmePerformFinalizeOrder orderObj cert
+  -- wait until certificate issued
+  finalOrder <- acmePerformWaitUntilOrderValid orderURL
+  -- download certificate
+  retrieveCertificate finalOrder
+
 -- ** Directory
 acmePerformRunner :: CragConfig -> IO (CragReader, CragState)
 acmePerformRunner cfg = do
@@ -144,30 +176,37 @@ acmePerformGetAuthorizations =
 acmePerformGetAuthorization :: URL -> CragT AcmeObjAuthorization
 acmePerformGetAuthorization url = resBody <$> acmeHttpGet url
 
-type ChallengeResponder a
-   = HostName -> AcmeKeyAuthorization -> (IO () -> CragT AcmeObjChallenge) -- ^ Perform challenge response, first argument is rollback
-                                          -> CragT a
+data ChallengeReaction = ChallengeReaction
+  { fulfill :: AcmeObjIdentifier -> AcmeKeyAuthorization -> IO ()
+  , rollback :: AcmeObjIdentifier -> AcmeKeyAuthorization -> IO ()
+  }
 
-acmePerformChallengeResponses ::
-     [(String, ChallengeResponder a)]
-  -> [AcmeObjAuthorization]
-  -> CragT [a] -- ^ 
-acmePerformChallengeResponses fs as = do
-  let actions =
-        map getF (filter ((== "pending") . acmeObjAuthorizationStatus) as)
-  mapM apply actions
+acmePerformChallengeReaction ::
+     [(String, ChallengeReaction)] -> [AcmeObjAuthorization] -> CragT ()
+acmePerformChallengeReaction reactions authzs = do
+  ops <- mapM reaction authzs'
+  sequence_
+    [ do keyAuthz <- acmeKeyAuthorization challenge
+         let identifier = acmeObjAuthorizationIdentifier authz
+         liftIO $ fulfill reaction identifier keyAuthz
+         acmeChallengeRespond challenge (rollback reaction identifier)
+    | (authz, challenge, reaction) <- ops
+    ]
   where
-    cs :: AcmeObjAuthorization -> [(String, AcmeObjChallenge)]
-    cs a =
-      map (\x -> (acmeObjChallengeType x, x)) $ acmeObjAuthorizationChallenges a
-    g a = msum [(,) f . (,) a <$> lookup chType (cs a) | (chType, f) <- fs]
-    getF a =
-      fromMaybe (throw $ AcmeErrNoFullfillableChallenge (map fst fs) a) (g a)
-    apply (f, (a, ch)) = do
-      argKey <- acmeKeyAuthorization ch
-      let argId = acmeObjIdentifierValue (acmeObjAuthorizationIdentifier a)
-          authz = acmeChallengeRespond (acmeObjChallengeUrl ch) argKey
-      f argId argKey authz
+    authzs' = filter ((== "pending") . acmeObjAuthorizationStatus) authzs
+    reaction ::
+         AcmeObjAuthorization
+      -> CragT (AcmeObjAuthorization, AcmeObjChallenge, ChallengeReaction)
+    reaction authz =
+      case listToMaybe
+             [ (authz, challenge, reaction)
+             | challenge <- acmeObjAuthorizationChallenges authz
+             , (t, reaction) <- reactions
+             , t == acmeObjChallengeType challenge
+             ] of
+        Just x -> return x
+        Nothing ->
+          throwError $ AcmeErrNoFullfillableChallenge (map fst reactions) authz
 
 acmePerformFinalizeOrder :: AcmeObjOrder -> Base64Octets -> CragT AcmeObjOrder
 acmePerformFinalizeOrder order =
@@ -179,17 +218,22 @@ acmePerformFinalizeOrder' url csr =
 
 -- | Respond to challenge
 acmeChallengeRespond ::
-     URL -> AcmeKeyAuthorization -> IO () -> CragT AcmeObjChallenge
-acmeChallengeRespond req k cleanup = do
-  res <- try $ resBody <$> acmeHttpJwsPostUrl req (AcmeObjChallengeResponse k)
+     AcmeObjChallenge
+  -> (AcmeKeyAuthorization -> IO ())
+  -> CragT AcmeObjChallenge
+acmeChallengeRespond challenge cleanup = do
+  k <- acmeKeyAuthorization challenge
+  res <-
+    try $
+    resBody <$>
+    acmeHttpJwsPostUrl
+      (acmeObjChallengeUrl challenge)
+      (AcmeObjChallengeResponse k)
   case res of
     Right r -> return r
     Left e -> do
-      _ <- liftIO cleanup
+      _ <- liftIO $ cleanup k
       throw (e :: AcmeErr)
-
-acmeChallengeRespond' :: URL -> AcmeKeyAuthorization -> CragT AcmeObjChallenge
-acmeChallengeRespond' req k = acmeChallengeRespond req k (return ())
 
 -- | Revoke
 acmePerformRevokeCertificate :: AcmeObjRevokeCertificate -> CragT ()

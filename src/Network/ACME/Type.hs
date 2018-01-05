@@ -1,19 +1,22 @@
 module Network.ACME.Type where
 
+import Control.Monad.Except
 import Control.Monad.Reader (ReaderT, runReaderT)
 import Control.Monad.State (StateT, runStateT)
 import Crypto.JOSE (JWK)
 import Network.HTTP.Client (Manager)
 
+import Network.ACME.Errors
 import Network.ACME.Object
 
 -- ** Monad Transformer
-type CragT = StateT CragState (ReaderT CragReader IO)
+type CragT = ExceptT AcmeErr (StateT CragState (ReaderT CragReader IO))
 
-runCragT :: CragT a -> (CragReader, CragState) -> IO (a, CragState)
-runCragT x (r, s) = (`runReaderT` r) $ (`runStateT` s) x
+runCragT ::
+     CragT a -> (CragReader, CragState) -> IO (Either AcmeErr a, CragState)
+runCragT x (r, s) = (`runReaderT` r) $ (`runStateT` s) $ runExceptT x
 
-evalCragT :: CragT a -> (CragReader, CragState) -> IO a
+evalCragT :: CragT a -> (CragReader, CragState) -> IO (Either AcmeErr a)
 evalCragT x v = do
   (o, _) <- runCragT x v
   return o
