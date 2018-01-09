@@ -189,6 +189,7 @@ acmeHttpJwsPost' retried withKid url bod = do
 -- | Perform POST query
 acmeHttpPost :: URL -> AcmeJws -> CragT AcmeResponse
 acmeHttpPost req bod = do
+  cragLog $ "POST " ++ show req
   manager <- asks (cragSetupHttpManager . cragSetup)
   parseResult req (Just bod') $
     httpLbs
@@ -202,6 +203,7 @@ acmeHttpGet ::
      URL -- ^ Request
   -> CragT AcmeResponse
 acmeHttpGet req = do
+  cragLog $ "GET " ++ show req
   manager <- asks (cragSetupHttpManager . cragSetup)
   liftIO $ acmeHttpGet' req manager
 
@@ -218,6 +220,7 @@ acmeHttpHead ::
      URL -- ^ Request
   -> CragT AcmeResponse
 acmeHttpHead req = do
+  cragLog $ "HEAD " ++ show req
   manager <- asks (cragSetupHttpManager . cragSetup)
   parseResult req Nothing $ httpLbs (newHttpRequest HEAD req) manager
 

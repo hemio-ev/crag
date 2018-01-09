@@ -1,7 +1,7 @@
 module Network.ACME.Type where
 
 import Control.Monad.Except
-import Control.Monad.Reader (ReaderT, runReaderT)
+import Control.Monad.Reader (ReaderT, asks, runReaderT)
 import Control.Monad.State (StateT, runStateT)
 import Crypto.JOSE (JWK)
 import Network.HTTP.Client (Manager)
@@ -50,4 +50,12 @@ data CragReader = CragReader
 data CragSetup = CragSetup
   { cragSetupJwkPublic :: JWK
   , cragSetupHttpManager :: Manager
+  , cragSetupLogger :: Maybe (String -> IO ())
   }
+
+cragLog :: String -> CragT ()
+cragLog msg = do
+  logger <- asks (cragSetupLogger . cragSetup)
+  case logger of
+    Nothing -> return ()
+    Just f -> liftIO $ f msg

@@ -40,9 +40,10 @@ data AcmeDirectoryMeta = AcmeDirectoryMeta
 -- | Account
 data AcmeObjAccount = AcmeObjAccount
   { acmeObjAccountStatus :: String
-  , acmeObjAccountContact :: Maybe [String]
+  , acmeObjAccountContact :: Maybe [URI]
   , acmeObjAccountTermsOfServiceAgreed :: Maybe Bool
-  , acmeObjAccountOrders :: Maybe URI
+  , acmeObjAccountOrders :: Maybe URL
+  -- ^ TODO: This should not be Maybe
   } deriving (Show)
 
 -- ** New Account
@@ -84,6 +85,11 @@ data AcmeObjNewOrder = AcmeObjNewOrder
   , acmeObjNewOrderNotAfter :: Maybe ZonedTime
   } deriving (Show)
 
+-- ** Orders List
+data AcmeObjOrdersList = AcmeObjOrdersList
+  { acmeObjOrdersListOrders :: [URL]
+  }
+
 -- ** Identifier
 -- | Identifier (original ACME standard only supports type /dns/)
 data AcmeObjIdentifier = AcmeObjIdentifier
@@ -102,7 +108,6 @@ data AcmeObjAuthorization = AcmeObjAuthorization
   { acmeObjAuthorizationIdentifier :: AcmeObjIdentifier
   , acmeObjAuthorizationStatus :: String
   , acmeObjAuthorizationExpires :: Maybe ZonedTime
-  , acmeObjAuthorizationScope :: Maybe URI
   , acmeObjAuthorizationChallenges :: [AcmeObjChallenge]
   } deriving (Show)
 
@@ -176,6 +181,7 @@ concat <$>
     , ''AcmeObjIdentifier
     , ''AcmeObjNewOrder
     , ''AcmeObjOrder
+    , ''AcmeObjOrdersList
     , ''AcmeObjStubAccount
     , ''ProblemDetail
     ]

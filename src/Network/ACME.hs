@@ -61,18 +61,24 @@ obtainCertificate domains cert reactions = do
 acmePerformRunner :: CragConfig -> ExceptT AcmeErr IO (CragReader, CragState)
 acmePerformRunner cfg = do
   manager <- newTlsManager
-  acmePerformRunner' manager cfg
+  acmePerformRunner' manager Nothing cfg
 
 acmePerformRunner' ::
-     Manager -> CragConfig -> ExceptT AcmeErr IO (CragReader, CragState)
-acmePerformRunner' manager cfg = do
+     Manager
+  -> Maybe (String -> IO ()) -- ^ Logger
+  -> CragConfig
+  -> ExceptT AcmeErr IO (CragReader, CragState)
+acmePerformRunner' manager logger cfg = do
   res <- acmePerformDirectory (cragConfigDirectoryURL cfg) manager
   publicKey <- either throwError return $ jwkPublic (cragConfigJwk cfg)
   return
     ( CragReader
         cfg
         CragSetup
-          {cragSetupJwkPublic = publicKey, cragSetupHttpManager = manager}
+          { cragSetupJwkPublic = publicKey
+          , cragSetupHttpManager = manager
+          , cragSetupLogger = logger
+          }
     , CragState
         { cragStateDirectory = res
         , cragStateNonce = Nothing
@@ -99,6 +105,10 @@ acmePerformAccountKeyRollover newJWK = do
   accURL <- acmePerformFindAccountURL
   let obj = AcmeObjAccountKeyRollover accURL newJWK
   resBody =<< acmeHttpJwsPost AcmeDirectoryRequestKeyChange obj
+
+-- | Account Orders
+retrieveOrdersList :: URL -> CragT AcmeObjOrdersList
+retrieveOrdersList url = resBody =<< acmeHttpGet url
 
 -- ** Certificate
 -- | Create new application (handing in a certificate request)

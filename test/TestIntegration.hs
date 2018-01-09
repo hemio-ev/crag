@@ -11,6 +11,7 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Either (isRight)
 import Data.IORef
+import Data.List (isInfixOf)
 import Data.Maybe (fromJust, fromMaybe)
 import Data.PEM (pemWriteBS)
 import Data.X509 (AltName(AltNameDNS), ExtSubjectAltName(ExtSubjectAltName))
@@ -24,6 +25,7 @@ import Data.X509.PKCS10
   , toDER
   , toPEM
   )
+import GHC.IO.Handle (hDuplicateTo, hGetLine)
 import Network.Connection (TLSSettings(TLSSettingsSimple))
 import Network.HTTP.Client
   ( Manager
@@ -35,7 +37,8 @@ import Network.HTTP.Client.TLS (mkManagerSettings)
 import Network.HTTP.Types
 import Network.Wai (rawPathInfo, requestHeaders, responseLBS)
 import Network.Wai.Handler.Warp
-import System.Process (spawnProcess, terminateProcess)
+import System.IO
+import System.Process
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -50,25 +53,32 @@ integrationTests =
 
 testNewAccount :: TestTree
 testNewAccount =
-  testCase "Account operations" $ do
+  testCaseSteps "Account operations" $ \step -> do
     (acc, jwk) <- acmeNewObjAccountStub "email1@example.org"
-    manager <- newUnsafeTestManager
-    (Right state) <- runExceptT $ acmePerformRunner' manager (config jwk)
+    state <- myState jwk step
     flip evalCragT state $ do
-      _ <- acmePerformCreateAccount acc
+      accObj <- acmePerformCreateAccount acc
       url <- acmePerformFindAccountURL
       liftIO $ print url
+      --list <- acmeObjOrdersListOrders <$> retrieveOrdersList (acmeObjAccountOrders accObj)
+      --liftIO (length list @?= 0)
       return ()
     return ()
 
+myState jwk step = do
+  manager <- newUnsafeTestManager
+  let logger = step
+  (Right state) <-
+    runExceptT $ acmePerformRunner' manager (Just logger) (config jwk)
+  return state
+
 testOrderNew :: TestTree
 testOrderNew =
-  testCase "Handle error" $ do
+  testCaseSteps "Handle error" $ \step -> do
     (accStub, jwk) <- acmeNewObjAccountStub "email@example.org"
     httpServerLiveConf <- newIORef []
     _ <- forkIO $ myHttpServer httpServerLiveConf
-    manager <- newUnsafeTestManager
-    (Right state) <- runExceptT $ acmePerformRunner' manager (config jwk)
+    state <- myState jwk step
     res <-
       flip evalCragT state $ do
         let domains = ["localhost"] --, "ip6-localhost", "ip6-loopback"]
@@ -79,16 +89,38 @@ testOrderNew =
           obtainCertificate domains cert (challengeReactions httpServerLiveConf)
         liftIO $ putStrLn (concat crt :: String)
         return ()
+    print res
     isRight res @?= True
+
+challengeReactions :: HTTPServerLiveConf -> [(String, ChallengeReaction)]
+challengeReactions httpServerLiveConf =
+  [ ( http01
+    , ChallengeReaction
+        { fulfill =
+            \identifier keyAuthz -> do
+              addResponse
+                (requestId identifier keyAuthz, keyAuthorization keyAuthz)
+                httpServerLiveConf
+              putStrLn "responded"
+        , rollback =
+            \identifier keyAuthz -> do
+              removeResponse (requestId identifier keyAuthz) httpServerLiveConf
+              putStrLn "removed"
+        })
+  ]
+  where
+    requestId identifier keyAuthz =
+      (acmeObjIdentifierValue identifier, keyAuthorizationHttpPath keyAuthz)
 
 pebbleResource :: TestTree -> TestTree
 pebbleResource = withResource pebbleProcess terminateProcess . const
   where
     pebbleProcess = do
-      p <- spawnProcess "gopath/bin/pebble" []
-      -- TODO: wait for 'Pebble running'
-      threadDelay (2 * 1000000)
-      return p
+      stdOut <- openFile "pebble.log" WriteMode
+      let pr = (proc "gopath/bin/pebble" []) {std_out = UseHandle stdOut}
+      (_, _, _, pid) <- createProcess_ "spawnProcess" pr
+      threadDelay 2000000
+      return pid
 
 type HTTPServerLiveConf = IORef [((String, String), String)]
 
@@ -120,26 +152,6 @@ newUnsafeTestManager =
   newManager
     (mkManagerSettings (TLSSettingsSimple True False False) Nothing)
       {managerResponseTimeout = responseTimeoutMicro 3000000}
-
-challengeReactions :: HTTPServerLiveConf -> [(String, ChallengeReaction)]
-challengeReactions httpServerLiveConf =
-  [ ( http01
-    , ChallengeReaction
-        { fulfill =
-            \identifier keyAuthz -> do
-              addResponse
-                (requestId identifier keyAuthz, keyAuthorization keyAuthz)
-                httpServerLiveConf
-              putStrLn "responded"
-        , rollback =
-            \identifier keyAuthz -> do
-              removeResponse (requestId identifier keyAuthz) httpServerLiveConf
-              putStrLn "removed"
-        })
-  ]
-  where
-    requestId identifier keyAuthz =
-      (acmeObjIdentifierValue identifier, keyAuthorizationHttpPath keyAuthz)
 
 newCrt :: [String] -> IO B.ByteString
 newCrt domains = do
