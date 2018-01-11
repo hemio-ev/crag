@@ -1,5 +1,7 @@
 module Network.ACME.HTTPS.Internal where
 
+import Control.Concurrent (threadDelay)
+import Control.Exception
 import Control.Monad.Except (ExceptT, catchError, lift, throwError)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (asks)
@@ -18,11 +20,14 @@ import Data.Time
   , parseTimeM
   )
 import Network.HTTP.Client
-  ( Manager
+  ( HttpException(HttpExceptionRequest)
+  , Manager
   , Request
   , RequestBody(RequestBodyLBS)
   , Response
+  , getUri
   , httpLbs
+  , method
   , method
   , parseRequest_
   , requestBody
@@ -48,43 +53,42 @@ maxRetries :: Int
 maxRetries = 20
 
 -- * Operations
--- | Get all supported resources from server
-acmePerformDirectory :: URL -> Manager -> ExceptT AcmeErr IO AcmeObjDirectory
-acmePerformDirectory acmeReq manager =
-  resBody' =<< liftIO (acmeHttpGet' acmeReq manager)
-
 -- | Get new nonce
 acmePerformNonce :: CragT AcmeJwsNonce
 acmePerformNonce = do
   req <- gets (acmeObjDirectoryNewNonce . cragStateDirectory)
-  h <- acmeHttpHead req
+  h <- httpsHead req
   AcmeJwsNonce <$> resHeader "Replay-Nonce" h
 
 acmePerformFindAccountURL :: CragT URL
 acmePerformFindAccountURL = do
-  res <-
-    acmeHttpJwsPostNewAccount
-      AcmeDirectoryRequestNewAccount
-      def {acmeObjStubAccountOnlyReturnExisting = Just True}
-  resHeaderAsURL "Location" res
+  url <- gets cragStateKid
+  case url of
+    Just u -> return u
+    Nothing -> do
+      res <-
+        httpsJwsPostNewAccount
+          AcmeDirectoryRequestNewAccount
+          def {acmeObjStubAccountOnlyReturnExisting = Just True}
+      resHeaderAsURL "Location" res
 
 -- * Server Response
-type AcmeResponse = Response L.ByteString
+type ResponseLbs = Response L.ByteString
 
-getHeader :: HeaderName -> AcmeResponse -> Maybe String
+getHeader :: HeaderName -> ResponseLbs -> Maybe String
 getHeader h r = B.unpack <$> getResponseHeader h r
 
-getResponseMimeType :: AcmeResponse -> Maybe (CI B.ByteString)
+getResponseMimeType :: ResponseLbs -> Maybe (CI B.ByteString)
 getResponseMimeType r =
   mk . B.takeWhile (`notElem` [';', ' ']) <$> getResponseHeader hContentType r
 
-getResponseHeader :: HeaderName -> AcmeResponse -> Maybe B.ByteString
+getResponseHeader :: HeaderName -> ResponseLbs -> Maybe B.ByteString
 getResponseHeader name = lookup name . responseHeaders
 
-resHeader :: HeaderName -> AcmeResponse -> CragT String
+resHeader :: HeaderName -> ResponseLbs -> CragT String
 resHeader h r = maybe (error "AcmeErrHeaderNotFound") return (getHeader h r)
 
-resHeaderAsURL :: HeaderName -> AcmeResponse -> CragT URL
+resHeaderAsURL :: HeaderName -> ResponseLbs -> CragT URL
 resHeaderAsURL x ys = do
   h <- resHeader x ys
   case parseURL h of
@@ -94,7 +98,7 @@ resHeaderAsURL x ys = do
         AcmeErrDecodingHeader
           {acmeErrHeaderName = show x, acmeErrHeaderValue = h}
 
-resRetryAfter :: AcmeResponse -> IO (Maybe Int)
+resRetryAfter :: ResponseLbs -> IO (Maybe Int)
 resRetryAfter r = do
   currentTime <- getCurrentTime
   return $ do
@@ -107,10 +111,10 @@ resRetryAfter r = do
 parseHttpTime :: String -> Maybe UTCTime
 parseHttpTime = parseTimeM True defaultTimeLocale "%a, %d %b %0Y %T GMT"
 
-resBody :: FromJSON a => AcmeResponse -> CragT a
+resBody :: FromJSON a => ResponseLbs -> CragT a
 resBody res = lift . lift $ resBody' res
 
-resBody' :: FromJSON a => AcmeResponse -> ExceptT AcmeErr IO a
+resBody' :: FromJSON a => ResponseLbs -> ExceptT AcmeErr IO a
 resBody' res =
   case eitherDecode (responseBody res) of
     Right x -> return x
@@ -118,66 +122,67 @@ resBody' res =
       throwError
         AcmeErrDecodingBody {acmeErrMessage = msg, acmeErrBody = show res}
 
-parsePEMBody :: AcmeResponse -> [B.ByteString]
+parsePEMBody :: ResponseLbs -> [B.ByteString]
 parsePEMBody res =
   case pemParseLBS (responseBody res) of
     Left e -> error e --ErrDecodingPEM e
     Right v -> map pemContent v
 
 -- * State Operations
-acmeTAddNonce :: AcmeResponse -> CragT ()
-acmeTAddNonce r = acmeTSetNonce $ AcmeJwsNonce <$> getHeader "Replay-Nonce" r
+cragStateAddNonce :: ResponseLbs -> CragT ()
+cragStateAddNonce r =
+  cragStateSetNonce $ AcmeJwsNonce <$> getHeader "Replay-Nonce" r
 
-acmeTSetNonce :: Maybe AcmeJwsNonce -> CragT ()
-acmeTSetNonce n = modify (\s -> s {cragStateNonce = n})
+cragStateSetNonce :: Maybe AcmeJwsNonce -> CragT ()
+cragStateSetNonce n = modify (\s -> s {cragStateNonce = n})
 
-acmeTSetKid :: Maybe URL -> CragT ()
-acmeTSetKid k = modify (\s -> s {cragStateKid = k})
+cragStateSetKid :: Maybe URL -> CragT ()
+cragStateSetKid k = modify (\s -> s {cragStateKid = k})
 
-acmeTGetNonce :: CragT AcmeJwsNonce
-acmeTGetNonce = do
+cragStateGetNonce :: CragT AcmeJwsNonce
+cragStateGetNonce = do
   nonce <- gets cragStateNonce
   case nonce of
     Just x -> return x
     Nothing -> acmePerformNonce
 
-acmeDictionaryUrl :: AcmeDirectoryRequest -> CragT URL
-acmeDictionaryUrl req = do
+cragStateGetDirectoryEntry :: AcmeDirectoryRequest -> CragT URL
+cragStateGetDirectoryEntry req = do
   url <- gets (acmeRequestUrl req . cragStateDirectory)
   maybe (throwError $ AcmeErrRequestNotSupported req) return url
 
 -- * Perform HTTPS
-acmeHttpJwsPostNewAccount ::
-     (ToJSON a) => AcmeDirectoryRequest -> a -> CragT AcmeResponse
-acmeHttpJwsPostNewAccount r x = do
-  url <- acmeDictionaryUrl r
-  acmeHttpJwsPost' 0 False url x
+httpsJwsPostNewAccount ::
+     (ToJSON a) => AcmeDirectoryRequest -> a -> CragT ResponseLbs
+httpsJwsPostNewAccount r x = do
+  url <- cragStateGetDirectoryEntry r
+  httpsJwsPost' 0 False url x
 
-acmeHttpJwsPostUrl :: (ToJSON a) => URL -> a -> CragT AcmeResponse
-acmeHttpJwsPostUrl = acmeHttpJwsPost' 0 True
+httpsJwsPostUrl :: (ToJSON a) => URL -> a -> CragT ResponseLbs
+httpsJwsPostUrl = httpsJwsPost' 0 True
 
-acmeHttpJwsPost :: (ToJSON a) => AcmeDirectoryRequest -> a -> CragT AcmeResponse
-acmeHttpJwsPost r x = do
-  url <- acmeDictionaryUrl r
-  acmeHttpJwsPostUrl url x
+httpsJwsPost :: (ToJSON a) => AcmeDirectoryRequest -> a -> CragT ResponseLbs
+httpsJwsPost r x = do
+  url <- cragStateGetDirectoryEntry r
+  httpsJwsPostUrl url x
 
-acmeHttpJwsPost' :: (ToJSON a) => Int -> Bool -> URL -> a -> CragT AcmeResponse
-acmeHttpJwsPost' retried withKid url bod = do
+httpsJwsPost' :: (ToJSON a) => Int -> Bool -> URL -> a -> CragT ResponseLbs
+httpsJwsPost' retried withKid url bod = do
   vKid <- accURL
-  acmeTSetKid vKid
-  nonce <- acmeTGetNonce
+  cragStateSetKid vKid
+  nonce <- cragStateGetNonce
   vJwkPublic <- asks (cragSetupJwkPublic . cragSetup)
   vJwkPrivate <- asks (cragConfigJwk . cragConfig)
   req <- lift . lift $ acmeNewJwsBody bod url vJwkPrivate vJwkPublic nonce vKid
-  res <- catchError (acmeHttpPost url req) handler
-  acmeTAddNonce res
+  res <- catchError (httpsPost url req) handler
+  cragStateAddNonce res
   return res
   where
-    handler :: AcmeErr -> CragT AcmeResponse
+    handler :: AcmeErr -> CragT ResponseLbs
     handler e@AcmeErrDetail {}
       | errBadNonce e || retried >= maxRetries = do
-        acmeTSetNonce Nothing
-        acmeHttpJwsPost' (retried + 1) withKid url bod
+        cragStateSetNonce Nothing
+        httpsJwsPost' (retried + 1) withKid url bod
       | otherwise = throwError e
     handler e = throwError e
     accURL :: CragT (Maybe URL)
@@ -186,48 +191,69 @@ acmeHttpJwsPost' retried withKid url bod = do
       | otherwise = return Nothing
 
 -- ** Lower level
--- | Perform POST query
-acmeHttpPost :: URL -> AcmeJws -> CragT AcmeResponse
-acmeHttpPost req bod = do
-  cragLog $ "POST " ++ show req
+https :: Request -> CragT ResponseLbs
+https request = do
+  cragLog $ reqStr request
+  cfg <- asks cragConfig
   manager <- asks (cragSetupHttpManager . cragSetup)
-  parseResult req (Just bod') $
-    httpLbs
-      (newHttpRequest POST req) {requestBody = RequestBodyLBS bod'}
-      manager
+  logger <- asks (cragSetupLogger . cragSetup)
+  lift . lift $ https' request cfg manager logger
+  where
+    reqStr x = show (method x) ++ " " ++ show (getUri x)
+
+https' ::
+     Request
+  -> CragConfig
+  -> Manager
+  -> CragLogger
+  -> ExceptT AcmeErr IO ResponseLbs
+https' request cfg manager logger = perform 20
+  where
+    perform :: Int -> ExceptT AcmeErr IO ResponseLbs
+    perform i = do
+      result <- liftIO $ try $ httpLbs request manager
+      case result of
+        Left e
+          | i < 0 -> throwError $ AcmeErrHTTPS e
+          | otherwise -> do
+            liftIO $ cragLog' logger $ show e
+            liftIO $ threadDelay 100000
+            perform (i - 1)
+        Right r -> return r
+
+-- | Perform POST query
+httpsPost :: URL -> AcmeJws -> CragT ResponseLbs
+httpsPost req bod =
+  https (newRequest POST req) {requestBody = RequestBodyLBS bod'} >>=
+  parseResult req (Just bod')
   where
     bod' = encode bod
 
 -- | Perform GET query
-acmeHttpGet ::
+httpsGet ::
      URL -- ^ Request
-  -> CragT AcmeResponse
-acmeHttpGet req = do
-  cragLog $ "GET " ++ show req
-  manager <- asks (cragSetupHttpManager . cragSetup)
-  liftIO $ acmeHttpGet' req manager
+  -> CragT ResponseLbs
+httpsGet url = https (newRequest GET url)
 
-acmeHttpGet' ::
+httpsGet' ::
      URL -- ^ Request
+  -> CragConfig
   -> Manager
-  -> IO AcmeResponse
-acmeHttpGet' req
-  --parseResult req Nothing $ 
- = httpLbs (newHttpRequest GET req)
+  -> CragLogger
+  -> ExceptT AcmeErr IO ResponseLbs
+httpsGet' url
+  --parseResult req Nothing $
+ = https' (newRequest GET url)
 
 -- | Perform HEAD query
-acmeHttpHead ::
+httpsHead ::
      URL -- ^ Request
-  -> CragT AcmeResponse
-acmeHttpHead req = do
-  cragLog $ "HEAD " ++ show req
-  manager <- asks (cragSetupHttpManager . cragSetup)
-  parseResult req Nothing $ httpLbs (newHttpRequest HEAD req) manager
+  -> CragT ResponseLbs
+httpsHead url = https (newRequest HEAD url) >>= parseResult url Nothing
 
 -- | Transforms abstract ACME to concrete HTTP request
-newHttpRequest :: StdMethod -> URL -> Request
-newHttpRequest meth acmeReq =
-  (parseRequest_ url) {method = renderStdMethod meth}
+newRequest :: StdMethod -> URL -> Request
+newRequest meth acmeReq = (parseRequest_ url) {method = renderStdMethod meth}
   where
     url = urlToString acmeReq
 
@@ -235,10 +261,9 @@ newHttpRequest meth acmeReq =
 parseResult ::
      URL
   -> Maybe L.ByteString -- ^ Body
-  -> IO (Response L.ByteString)
-  -> CragT AcmeResponse
-parseResult req bod resIO = do
-  res <- liftIO resIO
+  -> Response L.ByteString
+  -> CragT ResponseLbs
+parseResult req bod res =
   if getResponseMimeType res /= Just "application/problem+json"
     then return res
     else case eitherDecode (responseBody res) of

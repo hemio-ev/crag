@@ -1,11 +1,10 @@
 module Network.ACME.HTTPS
-  ( acmeHttpGet
-  , acmeHttpJwsPost
-  , acmeHttpJwsPostNewAccount
-  , acmeHttpJwsPostUrl
+  ( httpsGet
+  , httpsJwsPost
+  , httpsJwsPostNewAccount
+  , httpsJwsPostUrl
   , resBody
   , resHeaderAsURL
-  , acmePerformDirectory
   , acmePerformFindAccountURL
   , parsePEMBody
   ) where

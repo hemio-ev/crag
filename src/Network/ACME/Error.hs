@@ -26,7 +26,7 @@ data AcmeErr
   | AcmeErrJws JwsError
   | AcmeErrJwkNoPubkey
   -- | Wrapper for catched HTTP exceptions
-  | AcmeErrHttp HttpException
+  | AcmeErrHTTPS HttpException
   -- | Wanted challenge type to available
   | AcmeErrNoChallenge String
   | AcmeErrNoFullfillableChallenge { acmeErrNoFullfillableChallengeTypesSupported :: [String]

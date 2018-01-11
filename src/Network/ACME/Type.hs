@@ -7,6 +7,7 @@ import Crypto.JOSE (JWK)
 import Network.HTTP.Client (Manager)
 
 import Network.ACME.Error
+import Network.ACME.Internal
 import Network.ACME.Object
 
 -- ** Monad Transformer
@@ -50,12 +51,20 @@ data CragReader = CragReader
 data CragSetup = CragSetup
   { cragSetupJwkPublic :: JWK
   , cragSetupHttpManager :: Manager
-  , cragSetupLogger :: Maybe (String -> IO ())
+  , cragSetupLogger :: CragLogger
   }
 
 cragLog :: String -> CragT ()
 cragLog msg = do
   logger <- asks (cragSetupLogger . cragSetup)
+  liftIO $ cragLog' logger msg
+
+cragLog' :: CragLogger -> String -> IO ()
+cragLog' logger msg =
   case logger of
     Nothing -> return ()
     Just f -> liftIO $ f msg
+
+type CragLogger = Maybe (String -> IO ())
+
+deriveAcmeJSON ''CragConfig

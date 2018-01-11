@@ -20,6 +20,7 @@ import Network.HTTP.Client.TLS (newTlsManager)
 
 import Network.ACME.Error
 import Network.ACME.HTTPS
+import Network.ACME.HTTPS.Internal (httpsGet', resBody')
 import Network.ACME.Internal (secondsToMicroseconds)
 import Network.ACME.JWS
 import Network.ACME.Object
@@ -58,6 +59,12 @@ obtainCertificate domains cert reactions = do
   retrieveCertificate finalOrder
 
 -- ** Directory
+-- | Get all supported resources from server
+retrieveDirectory ::
+     CragConfig -> Manager -> CragLogger -> ExceptT AcmeErr IO AcmeObjDirectory
+retrieveDirectory cfg manager logger =
+  resBody' =<< httpsGet' (cragConfigDirectoryURL cfg) cfg manager logger
+
 acmePerformRunner :: CragConfig -> ExceptT AcmeErr IO (CragReader, CragState)
 acmePerformRunner cfg = do
   manager <- newTlsManager
@@ -65,11 +72,11 @@ acmePerformRunner cfg = do
 
 acmePerformRunner' ::
      Manager
-  -> Maybe (String -> IO ()) -- ^ Logger
+  -> CragLogger -- ^ Logger
   -> CragConfig
   -> ExceptT AcmeErr IO (CragReader, CragState)
 acmePerformRunner' manager logger cfg = do
-  res <- acmePerformDirectory (cragConfigDirectoryURL cfg) manager
+  res <- retrieveDirectory cfg manager logger
   publicKey <- either throwError return $ jwkPublic (cragConfigJwk cfg)
   return
     ( CragReader
@@ -89,13 +96,13 @@ acmePerformRunner' manager logger cfg = do
 -- | Account Creation (Registration)
 acmePerformCreateAccount :: AcmeObjStubAccount -> CragT AcmeObjAccount
 acmePerformCreateAccount stubAcc =
-  resBody =<< acmeHttpJwsPostNewAccount AcmeDirectoryRequestNewAccount stubAcc
+  resBody =<< httpsJwsPostNewAccount AcmeDirectoryRequestNewAccount stubAcc
 
 -- | Account Update
 acmePerformUpdateAccount :: AcmeObjAccount -> CragT AcmeObjAccount
 acmePerformUpdateAccount newAcc = do
   url <- acmePerformFindAccountURL
-  resBody =<< acmeHttpJwsPostUrl url newAcc
+  resBody =<< httpsJwsPostUrl url newAcc
 
 -- | Key Roll-over
 acmePerformAccountKeyRollover ::
@@ -104,23 +111,23 @@ acmePerformAccountKeyRollover ::
 acmePerformAccountKeyRollover newJWK = do
   accURL <- acmePerformFindAccountURL
   let obj = AcmeObjAccountKeyRollover accURL newJWK
-  resBody =<< acmeHttpJwsPost AcmeDirectoryRequestKeyChange obj
+  resBody =<< httpsJwsPost AcmeDirectoryRequestKeyChange obj
 
 -- | Account Orders
 retrieveOrdersList :: URL -> CragT AcmeObjOrdersList
-retrieveOrdersList url = resBody =<< acmeHttpGet url
+retrieveOrdersList url = resBody =<< httpsGet url
 
 -- ** Certificate
 -- | Create new application (handing in a certificate request)
 acmePerformNewOrder :: AcmeObjNewOrder -> CragT (URL, AcmeObjOrder)
 acmePerformNewOrder ord = do
-  res <- acmeHttpJwsPost AcmeDirectoryRequestNewOrder ord
+  res <- httpsJwsPost AcmeDirectoryRequestNewOrder ord
   loc <- resHeaderAsURL "Location" res
   newOrd <- resBody res
   return (loc, newOrd)
 
 acmePerformGetOrder :: URL -> CragT AcmeObjOrder
-acmePerformGetOrder url = resBody =<< acmeHttpGet url
+acmePerformGetOrder url = resBody =<< httpsGet url
 
 acmePerformWaitUntilOrderValid :: URL -> CragT AcmeObjOrder
 acmePerformWaitUntilOrderValid url = poll
@@ -173,7 +180,7 @@ retrieveCertificate :: CertificateForm a => AcmeObjOrder -> CragT [a]
 retrieveCertificate o = do
   crts <-
     parsePEMBody <$>
-    acmeHttpGet (fromMaybe (error "no cert url") (acmeObjOrderCertificate o))
+    httpsGet (fromMaybe (error "no cert url") (acmeObjOrderCertificate o))
   return (map fromBytestring crts)
 
 -- ** Authorization
@@ -182,7 +189,7 @@ acmePerformGetAuthorizations =
   mapM acmePerformGetAuthorization . acmeObjOrderAuthorizations
 
 acmePerformGetAuthorization :: URL -> CragT AcmeObjAuthorization
-acmePerformGetAuthorization url = resBody =<< acmeHttpGet url
+acmePerformGetAuthorization url = resBody =<< httpsGet url
 
 data ChallengeReaction = ChallengeReaction
   { fulfill :: AcmeObjIdentifier -> AcmeKeyAuthorization -> IO ()
@@ -222,7 +229,7 @@ acmePerformFinalizeOrder order =
 
 acmePerformFinalizeOrder' :: URL -> Base64Octets -> CragT AcmeObjOrder
 acmePerformFinalizeOrder' url csr =
-  resBody =<< acmeHttpJwsPostUrl url (AcmeObjFinalizeOrder csr)
+  resBody =<< httpsJwsPostUrl url (AcmeObjFinalizeOrder csr)
 
 -- | Respond to challenge
 acmeChallengeRespond ::
@@ -233,9 +240,7 @@ acmeChallengeRespond challenge cleanup = do
   k <- acmeKeyAuthorization challenge
   res <-
     resBody <$>
-    acmeHttpJwsPostUrl
-      (acmeObjChallengeUrl challenge)
-      (AcmeObjChallengeResponse k)
+    httpsJwsPostUrl (acmeObjChallengeUrl challenge) (AcmeObjChallengeResponse k)
   catchError res (handler k)
   where
     handler k e = do
@@ -245,7 +250,7 @@ acmeChallengeRespond challenge cleanup = do
 -- | Revoke
 acmePerformRevokeCertificate :: AcmeObjRevokeCertificate -> CragT ()
 acmePerformRevokeCertificate obj =
-  void (acmeHttpJwsPost AcmeDirectoryRequestRevokeCert obj)
+  void (httpsJwsPost AcmeDirectoryRequestRevokeCert obj)
 
 -- * Utils
 -- ** Object generation

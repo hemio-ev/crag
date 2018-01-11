@@ -2,7 +2,7 @@ module TestIntegration
   ( integrationTests
   ) where
 
-import Control.Concurrent (forkIO, threadDelay)
+import Control.Concurrent (forkIO)
 import Control.Monad.Except
 import Control.Monad.IO.Class (liftIO)
 import Crypto.Hash (SHA512(SHA512))
@@ -119,7 +119,6 @@ pebbleResource = withResource pebbleProcess terminateProcess . const
       stdOut <- openFile "pebble.log" WriteMode
       let pr = (proc "gopath/bin/pebble" []) {std_out = UseHandle stdOut}
       (_, _, _, pid) <- createProcess_ "spawnProcess" pr
-      threadDelay 2000000
       return pid
 
 type HTTPServerLiveConf = IORef [((String, String), String)]
