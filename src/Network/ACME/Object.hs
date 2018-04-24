@@ -44,8 +44,6 @@ data AcmeObjAccount = AcmeObjAccount
   { acmeObjAccountStatus :: String
   , acmeObjAccountContact :: Maybe [URI]
   , acmeObjAccountTermsOfServiceAgreed :: Maybe Bool
-  , acmeObjAccountOrders :: Maybe URL
-  -- ^ TODO: This should not be Maybe
   } deriving (Show)
 
 -- ** New Account
@@ -86,11 +84,6 @@ data AcmeObjNewOrder = AcmeObjNewOrder
   , acmeObjNewOrderNotBefore :: Maybe ZonedTime
   , acmeObjNewOrderNotAfter :: Maybe ZonedTime
   } deriving (Show)
-
--- ** Orders List
-data AcmeObjOrdersList = AcmeObjOrdersList
-  { acmeObjOrdersListOrders :: [URL]
-  }
 
 -- ** Identifier
 -- | Identifier (original ACME standard only supports type /dns/)
@@ -176,7 +169,6 @@ concat <$>
     , ''AcmeObjIdentifier
     , ''AcmeObjNewOrder
     , ''AcmeObjOrder
-    , ''AcmeObjOrdersList
     , ''AcmeObjStubAccount
     , ''ProblemDetail
     ]

@@ -113,10 +113,6 @@ acmePerformAccountKeyRollover newJWK = do
   let obj = AcmeObjAccountKeyRollover accURL newJWK
   resBody =<< httpsJwsPost AcmeDirectoryRequestKeyChange obj
 
--- | Account Orders
-retrieveOrdersList :: URL -> CragT AcmeObjOrdersList
-retrieveOrdersList url = resBody =<< httpsGet url
-
 -- ** Certificate
 -- | Create new application (handing in a certificate request)
 acmePerformNewOrder :: AcmeObjNewOrder -> CragT (URL, AcmeObjOrder)
