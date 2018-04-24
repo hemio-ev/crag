@@ -1,10 +1,12 @@
 module Network.ACME.Object
   ( module Network.ACME.Object
   , URL
+  , emptyObject
   ) where
 
 import Crypto.JOSE (JWK)
 import Crypto.JOSE.Types (Base64Octets)
+import Data.Aeson.Types (emptyObject)
 import Data.Default.Class (Default(def))
 import Data.Time (ZonedTime)
 import Network.Socket (HostName)
@@ -121,11 +123,6 @@ data AcmeObjChallenge = AcmeObjChallenge
   , acmeObjChallengeToken :: String
   } deriving (Show)
 
--- ** Challenge Response
-data AcmeObjChallengeResponse = AcmeObjChallengeResponse
-  { acmeObjChallengeResponseKeyAuthorization :: AcmeKeyAuthorization
-  } deriving (Show)
-
 data AcmeKeyAuthorization =
   AcmeKeyAuthorization String
   deriving (Show)
@@ -169,13 +166,11 @@ concat <$>
     deriveAcmeJSON
     [ ''AcmeDirectoryMeta
     , ''AcmeJwsNonce
-    , ''AcmeKeyAuthorization
     , ''AcmeObjAccount
     , ''AcmeObjAccountKeyRollover
     , ''AcmeObjAuthorization
     , ''AcmeObjRevokeCertificate
     , ''AcmeObjChallenge
-    , ''AcmeObjChallengeResponse
     , ''AcmeObjDirectory
     , ''AcmeObjFinalizeOrder
     , ''AcmeObjIdentifier

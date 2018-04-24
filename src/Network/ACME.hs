@@ -238,9 +238,7 @@ acmeChallengeRespond ::
   -> CragT AcmeObjChallenge
 acmeChallengeRespond challenge cleanup = do
   k <- acmeKeyAuthorization challenge
-  res <-
-    resBody <$>
-    httpsJwsPostUrl (acmeObjChallengeUrl challenge) (AcmeObjChallengeResponse k)
+  res <- resBody <$> httpsJwsPostUrl (acmeObjChallengeUrl challenge) emptyObject
   catchError res (handler k)
   where
     handler k e = do

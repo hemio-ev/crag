@@ -31,6 +31,7 @@ import Network.HTTP.Client
   , method
   , parseRequest_
   , requestBody
+  , requestHeaders
   , responseBody
   , responseHeaders
   , responseStatus
@@ -224,7 +225,11 @@ https' request cfg manager logger = perform 20
 -- | Perform POST query
 httpsPost :: URL -> AcmeJws -> CragT ResponseLbs
 httpsPost req bod =
-  https (newRequest POST req) {requestBody = RequestBodyLBS bod'} >>=
+  https
+    (newRequest POST req)
+      { requestBody = RequestBodyLBS bod'
+      , requestHeaders = [("Content-Type", "application/jose+json")]
+      } >>=
   parseResult req (Just bod')
   where
     bod' = encode bod

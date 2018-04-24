@@ -117,7 +117,8 @@ pebbleResource = withResource pebbleProcess terminateProcess . const
   where
     pebbleProcess = do
       stdOut <- openFile "pebble.log" WriteMode
-      let pr = (proc "gopath/bin/pebble" []) {std_out = UseHandle stdOut}
+      let pr =
+            (proc "gopath/bin/pebble" ["-strict"]) {std_out = UseHandle stdOut}
       (_, _, _, pid) <- createProcess_ "spawnProcess" pr
       return pid
 
