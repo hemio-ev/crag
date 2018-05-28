@@ -10,6 +10,7 @@ import Control.Monad.Except (ExceptT, catchError, throwError)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (asks)
 import Crypto.JOSE (KeyMaterialGenParam(RSAGenParam), genJWK)
+import Data.Aeson (FromJSON)
 import qualified Data.ByteString.Char8 as B
 import Data.Default.Class (def)
 import Data.Maybe (fromMaybe, listToMaybe)
@@ -27,7 +28,7 @@ import Network.ACME.Object
 import Network.ACME.Type
 
 -- * Perform Requests
--- **
+-- ** Basic
 http01 :: String
 http01 = "http-01"
 
@@ -39,10 +40,10 @@ tlsSni02 = "tls-sni-02"
 
 obtainCertificate ::
      CertificateForm a
-  => [String] -- ^ domains
+  => [String] -- ^ Domains
   -> Base64Octets -- ^ CSR
-  -> [(String, ChallengeReaction)] -- Challenge reactions
-  -> CragT [a]
+  -> [(String, ChallengeReaction)] -- ^ Challenge reactions
+  -> CragT [a] -- ^ Certificate chain?
 obtainCertificate domains cert reactions = do
   (orderURL, orderObj) <- acmePerformNewOrder (acmeNewObjOrder domains)
   _ <-
@@ -93,9 +94,12 @@ acmePerformRunner' manager logger cfg = do
 
 -- ** Account
 -- | Account Creation (Registration)
-acmePerformCreateAccount :: AcmeObjStubAccount -> CragT AcmeObjAccount
-acmePerformCreateAccount stubAcc =
-  resBody =<< httpsJwsPostNewAccount AcmeDirectoryRequestNewAccount stubAcc
+acmePerformCreateAccount :: AcmeObjStubAccount -> CragT (URL, AcmeObjAccount)
+acmePerformCreateAccount stubAcc = do
+  res <- httpsJwsPostNewAccount AcmeDirectoryRequestNewAccount stubAcc
+  loc <- resHeaderAsURL "Location" res
+  acc <- resBody res
+  return (loc, acc)
 
 -- | Account Update
 acmePerformUpdateAccount :: AcmeObjAccount -> CragT AcmeObjAccount
@@ -113,7 +117,7 @@ acmePerformAccountKeyRollover newJWK = do
   resBody =<< httpsJwsPost AcmeDirectoryRequestKeyChange obj
 
 -- ** Certificate
--- | Create new application (handing in a certificate request)
+-- | Create order (handing in a certificate request)
 acmePerformNewOrder :: AcmeObjNewOrder -> CragT (URL, AcmeObjOrder)
 acmePerformNewOrder ord = do
   res <- httpsJwsPost AcmeDirectoryRequestNewOrder ord
@@ -121,14 +125,11 @@ acmePerformNewOrder ord = do
   newOrd <- resBody res
   return (loc, newOrd)
 
-acmePerformGetOrder :: URL -> CragT AcmeObjOrder
-acmePerformGetOrder url = resBody =<< httpsGet url
-
 acmePerformWaitUntilOrderReady :: URL -> CragT AcmeObjOrder
 acmePerformWaitUntilOrderReady url = poll
   where
     poll = do
-      ord <- acmePerformGetOrder url
+      ord <- acmePerformGetObject url
       case acmeObjOrderStatus ord of
         "pending" -> retry poll
         "ready" -> return ord
@@ -138,22 +139,16 @@ acmePerformWaitUntilOrderValid :: URL -> CragT AcmeObjOrder
 acmePerformWaitUntilOrderValid url = poll
   where
     poll = do
-      ord <- acmePerformGetOrder url
+      ord <- acmePerformGetObject url
       case acmeObjOrderStatus ord of
         "processing" -> retry poll
         "valid" -> return ord
         s -> error $ "state not good: " ++ s
 
-retry :: CragT a -> CragT a
-retry poll = do
-  i <- asks (cragConfigPollingInterval . cragConfig)
-  liftIO $ threadDelay (secondsToMicroseconds i)
-  poll
-
 class CertificateForm a where
   fromBytestring :: B.ByteString -> a
 
-instance CertificateForm (X509.SignedExact X509.Certificate) where
+instance CertificateForm X509.SignedCertificate where
   fromBytestring x =
     case X509.decodeSignedObject x of
       Left e -> error e
@@ -177,12 +172,10 @@ retrieveCertificate o = do
   return (map fromBytestring crts)
 
 -- ** Authorization
+-- | Get all authorizations of an order
 acmePerformGetAuthorizations :: AcmeObjOrder -> CragT [AcmeObjAuthorization]
 acmePerformGetAuthorizations =
-  mapM acmePerformGetAuthorization . acmeObjOrderAuthorizations
-
-acmePerformGetAuthorization :: URL -> CragT AcmeObjAuthorization
-acmePerformGetAuthorization url = resBody =<< httpsGet url
+  mapM acmePerformGetObject . acmeObjOrderAuthorizations
 
 data ChallengeReaction = ChallengeReaction
   { fulfill :: AcmeObjIdentifier -> AcmeKeyAuthorization -> IO ()
@@ -255,6 +248,10 @@ acmeNewObjAccountStub mail = do
         }
     , keyMat)
 
+-- | Get ACME Object
+acmePerformGetObject :: FromJSON a => URL -> CragT a
+acmePerformGetObject url = resBody =<< httpsGet url
+
 acmeNewJWK :: IO JWK
 acmeNewJWK = genJWK (RSAGenParam 256)
 
@@ -278,6 +275,12 @@ acmeNewObjRevokeCertificate crt =
         Base64Octets (X509.encodeSignedObject crt)
     , acmeObjRevokeCertificateReason = Nothing
     }
+
+retry :: CragT a -> CragT a
+retry poll = do
+  i <- asks (cragConfigPollingInterval . cragConfig)
+  liftIO $ threadDelay (secondsToMicroseconds i)
+  poll
 
 -- ** Other
 -- | keyAuthorization for a given challenge

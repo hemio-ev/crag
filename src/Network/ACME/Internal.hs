@@ -34,7 +34,7 @@ secondsToMicroseconds = (*) 1000000
 -- To the @https:@ URI scheme.
 data URL =
   URL URI
-  deriving (Show)
+  deriving (Show, Eq)
 
 isValidURL :: URI -> Bool
 isValidURL = (== "https:") . uriScheme

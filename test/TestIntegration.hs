@@ -56,11 +56,11 @@ testNewAccount =
   testCaseSteps "Account operations" $ \step -> do
     (acc, jwk) <- acmeNewObjAccountStub "email1@example.org"
     state <- myState jwk step
-    flip evalCragT state $ do
-      accObj <- acmePerformCreateAccount acc
-      url <- acmePerformFindAccountURL
-      liftIO $ print url
-      return ()
+    _ <-
+      flip evalCragT state $ do
+        (url1, accObj) <- acmePerformCreateAccount acc
+        url2 <- acmePerformFindAccountURL
+        return (url1 @?= url2)
     return ()
 
 myState jwk step = do
@@ -99,11 +99,11 @@ challengeReactions httpServerLiveConf =
               addResponse
                 (requestId identifier keyAuthz, keyAuthorization keyAuthz)
                 httpServerLiveConf
-              putStrLn "responded"
+              putStrLn "[Challenge Reaction] Fulfilled challenge"
         , rollback =
             \identifier keyAuthz -> do
               removeResponse (requestId identifier keyAuthz) httpServerLiveConf
-              putStrLn "removed"
+              putStrLn "[Challenge Reaction] Removed challenge response"
         })
   ]
   where
@@ -141,8 +141,8 @@ myHttpServer v = runSettings (setHost "::1" $ setPort 5002 defaultSettings) app
       case lookup (host, path) resp of
         Nothing -> error $ show (host, path) ++ " not found in " ++ show resp
         Just r -> do
-          putStrLn "responding NOW"
-          print (host, path)
+          putStrLn $
+            "[HTTP-Server] Responding to request: " ++ show (host, path)
           respond $ responseLBS status200 [] (L.pack r)
 
 newUnsafeTestManager :: IO Manager
