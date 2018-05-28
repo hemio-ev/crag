@@ -49,8 +49,7 @@ obtainCertificate domains cert reactions = do
     acmePerformGetAuthorizations orderObj >>=
     acmePerformChallengeReaction reactions
   -- wait until server has validated
-  mapM_ acmePerformWaitUntilAuthorizationValid $
-    acmeObjOrderAuthorizations orderObj
+  _ <- acmePerformWaitUntilOrderReady orderURL
   -- finalize: submit CSR
   _ <- acmePerformFinalizeOrder orderObj cert
   -- wait until certificate issued
@@ -125,24 +124,22 @@ acmePerformNewOrder ord = do
 acmePerformGetOrder :: URL -> CragT AcmeObjOrder
 acmePerformGetOrder url = resBody =<< httpsGet url
 
+acmePerformWaitUntilOrderReady :: URL -> CragT AcmeObjOrder
+acmePerformWaitUntilOrderReady url = poll
+  where
+    poll = do
+      ord <- acmePerformGetOrder url
+      case acmeObjOrderStatus ord of
+        "pending" -> retry poll
+        "ready" -> return ord
+        s -> error $ "state not good: " ++ s
+
 acmePerformWaitUntilOrderValid :: URL -> CragT AcmeObjOrder
 acmePerformWaitUntilOrderValid url = poll
   where
     poll = do
       ord <- acmePerformGetOrder url
       case acmeObjOrderStatus ord of
-        "pending" -> retry poll
-        "processing" -> retry poll
-        "valid" -> return ord
-        s -> error $ "state not good: " ++ s
-
-acmePerformWaitUntilAuthorizationValid :: URL -> CragT AcmeObjAuthorization
-acmePerformWaitUntilAuthorizationValid url = poll
-  where
-    poll = do
-      ord <- acmePerformGetAuthorization url
-      case acmeObjAuthorizationStatus ord of
-        "pending" -> retry poll
         "processing" -> retry poll
         "valid" -> return ord
         s -> error $ "state not good: " ++ s

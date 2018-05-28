@@ -60,8 +60,6 @@ testNewAccount =
       accObj <- acmePerformCreateAccount acc
       url <- acmePerformFindAccountURL
       liftIO $ print url
-      --list <- acmeObjOrdersListOrders <$> retrieveOrdersList (acmeObjAccountOrders accObj)
-      --liftIO (length list @?= 0)
       return ()
     return ()
 

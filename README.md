@@ -34,6 +34,6 @@ This library has workarounds for compatibility with *boulder*. They will be
 dropped, once *boulder* follows the upcomming RFC.
 
 - [ACME draft at IETF](https://datatracker.ietf.org/doc/draft-ietf-acme-acme)
-- [Pebble (Let's Encrypt's ACME test server)](https://github.com/letsencrypt/boulder)
+- [Pebble (Let's Encrypt's ACME test server)](https://github.com/letsencrypt/pebble)
 - [Boulder (Let's Encrypt's ACME server)](https://github.com/letsencrypt/boulder)
 - [Boulder divergences from ACME](https://github.com/letsencrypt/boulder/blob/master/docs/acme-divergences.md)
