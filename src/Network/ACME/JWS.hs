@@ -15,6 +15,7 @@ import Crypto.JOSE.Types (Base64Octets(..))
 import Data.Aeson
 import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Lazy (toStrict)
+import Data.Text as T
 
 import Network.ACME.Error
 import Network.ACME.Object (AcmeJwsNonce, URL, urlToString)
@@ -69,7 +70,7 @@ newAcmeJwsHeader vUrl vJwkPrivate vJwkPublic vNonce vKid
         Left e -> throwError $ AcmeErrJws e
     setAuth =
       case vKid of
-        Just k -> set kid (Just $ HeaderParam Protected (urlToString k))
+        Just k -> set kid (Just $ HeaderParam Protected (T.pack $ urlToString k))
         Nothing -> set jwk (Just $ HeaderParam Protected vJwkPublic)
 
 -- | Removes private key

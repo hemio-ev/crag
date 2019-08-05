@@ -28,7 +28,7 @@ library
     Network.ACME.Object
     Network.ACME.Type
   build-depends:
-    base >=4.8 && <4.10,
+    base,
     aeson,
     bytestring,
     case-insensitive,
@@ -43,6 +43,7 @@ library
     network-uri,
     pem,
     template-haskell,
+    text,
     time,
     x509
   hs-source-dirs:      src
@@ -61,7 +62,7 @@ test-suite crag-unit
   hs-source-dirs: .    test
   build-depends:
     crag,
-    base >=4.8 && <4.10,
+    base,
     aeson,
     bytestring,
     transformers,
@@ -84,7 +85,7 @@ test-suite crag-integration
   other-modules: TestIntegration
   build-depends:
     crag,
-    base >=4.8 && <4.10,
+    base,
     aeson,
     bytestring,
     connection,
