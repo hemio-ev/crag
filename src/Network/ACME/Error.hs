@@ -18,10 +18,12 @@ errBadNonce _ = False
 
 data AcmeErr
   -- | Server reported an error with structured details
-  = AcmeErrDetail { acmeErrRequest :: URL
-                  , acmeErrHttpStatus :: Status
-                  , acmeErrProblemDetail :: ProblemDetail
-                  , acmeErrRequestBody :: Maybe L.ByteString }
+  = AcmeErrDetail
+      { acmeErrRequest :: URL
+      , acmeErrHttpStatus :: Status
+      , acmeErrProblemDetail :: ProblemDetail
+      , acmeErrRequestBody :: Maybe L.ByteString
+      }
   -- | Wrapper for JWS Errors
   | AcmeErrJws JwsError
   | AcmeErrJwkNoPubkey
@@ -29,8 +31,10 @@ data AcmeErr
   | AcmeErrHTTPS HttpException
   -- | Wanted challenge type to available
   | AcmeErrNoChallenge String
-  | AcmeErrNoFullfillableChallenge { acmeErrNoFullfillableChallengeTypesSupported :: [String]
-                                   , acmeErrNoFullfillableChallengeAuthorization :: AcmeObjAuthorization }
+  | AcmeErrNoFullfillableChallenge
+      { acmeErrNoFullfillableChallengeTypesSupported :: [String]
+      , acmeErrNoFullfillableChallengeAuthorization :: AcmeObjAuthorization
+      }
   -- | Challenge did not contain a "token" field
   | AcmeErrNoToken AcmeObjChallenge
   -- | Request not supported by the server (not in 'AcmeObjDirectory')
@@ -39,19 +43,27 @@ data AcmeErr
   -- API violations: The following errors should not occur
   --
   -- | Expected HTTP status but body has not the expected format
-  | AcmeErrDecodingBody { acmeErrMessage :: String
-                        , acmeErrBody :: String }
+  | AcmeErrDecodingBody
+      { acmeErrMessage :: String
+      , acmeErrBody :: String
+      }
   | ErrDecodingPEM String
   -- | Unexpected HTTP response status, but response is not a 'ProblemDetail'
-  | AcmeErrDecodingProblemDetail { acmeErrHttpStatus :: Status
-                                 , acmeErrMessage :: String
-                                 , acmeErrResponseBody :: String }
+  | AcmeErrDecodingProblemDetail
+      { acmeErrHttpStatus :: Status
+      , acmeErrMessage :: String
+      , acmeErrResponseBody :: String
+      }
   -- | Header content could not be decoded
-  | AcmeErrDecodingHeader { acmeErrHeaderName :: String
-                          , acmeErrHeaderValue :: String }
+  | AcmeErrDecodingHeader
+      { acmeErrHeaderName :: String
+      , acmeErrHeaderValue :: String
+      }
   -- | Certificate could not be decoded
-  | AcmeErrDecodingX509 { acmeErrMessage :: String
-                        , acmeErrBody :: String }
+  | AcmeErrDecodingX509
+      { acmeErrMessage :: String
+      , acmeErrBody :: String
+      }
   -- | Expected HTTP header not found
   | AcmeErrHeaderNotFound HeaderName
   deriving (Show)

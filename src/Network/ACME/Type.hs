@@ -23,36 +23,40 @@ evalCragT x v = do
   return (fst <$> o)
 
 -- ** Client Configuration
-data CragConfig = CragConfig
-  { cragConfigDirectoryURL :: URL
-  , cragConfigJwk :: JWK
-  , cragConfigPollingInterval :: Int
+data CragConfig =
+  CragConfig
+    { cragConfigDirectoryURL :: URL
+    , cragConfigJwk :: JWK
+    , cragConfigPollingInterval :: Int
   -- ^ Default polling interval in seconds.
   --
   -- If available, the servers @Retry-After@ header is used instead.
-  , cragConfigRateLimitRetryAfter :: Int
+    , cragConfigRateLimitRetryAfter :: Int
   -- ^ Default retry interval in seconds when hitting rate limits.
   --
   -- If available, the servers @Retry-After@ header is used instead.
-  }
+    }
 
 -- ** State and Reader
-data CragState = CragState
-  { cragStateDirectory :: AcmeObjDirectory
-  , cragStateNonce :: Maybe AcmeJwsNonce
-  , cragStateKid :: Maybe URL
-  }
+data CragState =
+  CragState
+    { cragStateDirectory :: AcmeObjDirectory
+    , cragStateNonce :: Maybe AcmeJwsNonce
+    , cragStateKid :: Maybe URL
+    }
 
-data CragReader = CragReader
-  { cragConfig :: CragConfig
-  , cragSetup :: CragSetup
-  }
+data CragReader =
+  CragReader
+    { cragConfig :: CragConfig
+    , cragSetup :: CragSetup
+    }
 
-data CragSetup = CragSetup
-  { cragSetupJwkPublic :: JWK
-  , cragSetupHttpManager :: Manager
-  , cragSetupLogger :: CragLogger
-  }
+data CragSetup =
+  CragSetup
+    { cragSetupJwkPublic :: JWK
+    , cragSetupHttpManager :: Manager
+    , cragSetupLogger :: CragLogger
+    }
 
 cragLog :: String -> CragT ()
 cragLog msg = do

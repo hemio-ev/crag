@@ -177,10 +177,11 @@ acmePerformGetAuthorizations :: AcmeObjOrder -> CragT [AcmeObjAuthorization]
 acmePerformGetAuthorizations =
   mapM acmePerformGetObject . acmeObjOrderAuthorizations
 
-data ChallengeReaction = ChallengeReaction
-  { fulfill :: AcmeObjIdentifier -> AcmeKeyAuthorization -> IO ()
-  , rollback :: AcmeObjIdentifier -> AcmeKeyAuthorization -> IO ()
-  }
+data ChallengeReaction =
+  ChallengeReaction
+    { fulfill :: AcmeObjIdentifier -> AcmeKeyAuthorization -> IO ()
+    , rollback :: AcmeObjIdentifier -> AcmeKeyAuthorization -> IO ()
+    }
 
 acmePerformChallengeReaction ::
      [(String, ChallengeReaction)] -> [AcmeObjAuthorization] -> CragT ()

@@ -109,7 +109,7 @@ test-suite crag-integration
     warp,
     wai,
     -- code formatting/quality
-    hindent == 5.2.5.*,
+    hindent == 5.3,
     hlint > 2
   ghc-options:
     -Wall

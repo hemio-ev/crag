@@ -23,11 +23,13 @@ import Network.ACME.Object (AcmeJwsNonce, URL, urlToString)
 type AcmeJws = FlattenedJWS AcmeJwsHeader
 
 -- | Enhanced 'JWSHeader' with additional header parameters
-data AcmeJwsHeader a = AcmeJwsHeader
-  { _acmeJwsHeaderNonce :: AcmeJwsNonce
-  , _acmeJwsHeaderUrl :: URL
-  , _acmeJwsHeader :: JWSHeader a
-  } deriving (Show)
+data AcmeJwsHeader a =
+  AcmeJwsHeader
+    { _acmeJwsHeaderNonce :: AcmeJwsNonce
+    , _acmeJwsHeaderUrl :: URL
+    , _acmeJwsHeader :: JWSHeader a
+    }
+  deriving (Show)
 
 makeLenses ''AcmeJwsHeader
 
@@ -70,7 +72,8 @@ newAcmeJwsHeader vUrl vJwkPrivate vJwkPublic vNonce vKid
         Left e -> throwError $ AcmeErrJws e
     setAuth =
       case vKid of
-        Just k -> set kid (Just $ HeaderParam Protected (T.pack $ urlToString k))
+        Just k ->
+          set kid (Just $ HeaderParam Protected (T.pack $ urlToString k))
         Nothing -> set jwk (Just $ HeaderParam Protected vJwkPublic)
 
 -- | Removes private key
