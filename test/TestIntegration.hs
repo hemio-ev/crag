@@ -55,7 +55,7 @@ testNewAccount :: TestTree
 testNewAccount =
   testCaseSteps "Account operations" $ \step -> do
     (acc, jwk) <- acmeNewObjAccountStub "email1@example.org"
-    state <- myState jwk step
+    state <- myState jwk putStrLn
     _ <-
       flip evalCragT state $ do
         (url1, accObj) <- acmePerformCreateAccount acc
@@ -63,20 +63,13 @@ testNewAccount =
         return (url1 @?= url2)
     return ()
 
-myState jwk step = do
-  manager <- newUnsafeTestManager
-  let logger = step
-  (Right state) <-
-    runExceptT $ acmePerformRunner' manager (Just logger) (config jwk)
-  return state
-
 testOrderNew :: TestTree
 testOrderNew =
-  testCaseSteps "Handle error" $ \step -> do
+  testCaseSteps "testOrderNew" $ \step -> do
     (accStub, jwk) <- acmeNewObjAccountStub "email@example.org"
     httpServerLiveConf <- newIORef []
     _ <- forkIO $ myHttpServer httpServerLiveConf
-    state <- myState jwk step
+    state <- myState jwk putStrLn
     res <-
       flip evalCragT state $ do
         let domains = ["localhost"] --, "ip6-localhost", "ip6-loopback"]
@@ -85,10 +78,17 @@ testOrderNew =
         _ <- acmePerformCreateAccount accStub
         crt <-
           obtainCertificate domains cert (challengeReactions httpServerLiveConf)
-        liftIO $ putStrLn (concat crt :: String)
+        liftIO $ putStrLn ("CRT: " <> concat crt)
         return ()
     print res
     isRight res @?= True
+
+myState jwk step = do
+  manager <- newUnsafeTestManager
+  let logger x = step ("[cragLog] " <> x)
+  (Right state) <-
+    runExceptT $ acmePerformRunner' manager (Just logger) (config jwk)
+  return state
 
 challengeReactions :: HTTPServerLiveConf -> [(String, ChallengeReaction)]
 challengeReactions httpServerLiveConf =

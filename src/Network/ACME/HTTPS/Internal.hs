@@ -6,7 +6,7 @@ import Control.Monad.Except (ExceptT, catchError, lift, throwError)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (asks)
 import Control.Monad.State (gets, modify)
-import Data.Aeson (FromJSON, ToJSON, eitherDecode, encode)
+import Data.Aeson (FromJSON, ToJSON, Value, eitherDecode, encode)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.CaseInsensitive (CI, mk)
@@ -157,17 +157,21 @@ httpsJwsPostNewAccount ::
      (ToJSON a) => AcmeDirectoryRequest -> a -> CragT ResponseLbs
 httpsJwsPostNewAccount r x = do
   url <- cragStateGetDirectoryEntry r
-  httpsJwsPost' 0 False url x
+  httpsJwsPost' 0 False url (Just x)
 
 httpsJwsPostUrl :: (ToJSON a) => URL -> a -> CragT ResponseLbs
-httpsJwsPostUrl = httpsJwsPost' 0 True
+httpsJwsPostUrl url x = httpsJwsPost' 0 True url (Just x)
+
+httpsJwsPostAsGetUrl :: URL -> CragT ResponseLbs
+httpsJwsPostAsGetUrl url = httpsJwsPost' 0 True url (Nothing :: Maybe Value)
 
 httpsJwsPost :: (ToJSON a) => AcmeDirectoryRequest -> a -> CragT ResponseLbs
 httpsJwsPost r x = do
   url <- cragStateGetDirectoryEntry r
   httpsJwsPostUrl url x
 
-httpsJwsPost' :: (ToJSON a) => Int -> Bool -> URL -> a -> CragT ResponseLbs
+httpsJwsPost' ::
+     (ToJSON a) => Int -> Bool -> URL -> Maybe a -> CragT ResponseLbs
 httpsJwsPost' retried withKid url bod = do
   vKid <- accURL
   cragStateSetKid vKid

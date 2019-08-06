@@ -45,6 +45,7 @@ obtainCertificate ::
   -> [(String, ChallengeReaction)] -- ^ Challenge reactions
   -> CragT [a] -- ^ Certificate chain?
 obtainCertificate domains cert reactions = do
+  cragLog "obtainCertificate"
   (orderURL, orderObj) <- acmePerformNewOrder (acmeNewObjOrder domains)
   _ <-
     acmePerformGetAuthorizations orderObj >>=
@@ -96,6 +97,7 @@ acmePerformRunner' manager logger cfg = do
 -- | Account Creation (Registration)
 acmePerformCreateAccount :: AcmeObjStubAccount -> CragT (URL, AcmeObjAccount)
 acmePerformCreateAccount stubAcc = do
+  cragLog "acmePerformCreateAccount"
   res <- httpsJwsPostNewAccount AcmeDirectoryRequestNewAccount stubAcc
   loc <- resHeaderAsURL "Location" res
   acc <- resBody res
@@ -112,6 +114,7 @@ acmePerformAccountKeyRollover ::
      JWK -- ^ New key
   -> CragT AcmeObjAccount
 acmePerformAccountKeyRollover newJWK = do
+  cragLog "acmePerformFindAccountURL"
   accURL <- acmePerformFindAccountURL
   let obj = AcmeObjAccountKeyRollover accURL newJWK
   resBody =<< httpsJwsPost AcmeDirectoryRequestKeyChange obj
@@ -131,7 +134,9 @@ acmePerformWaitUntilOrderReady url = poll
     poll = do
       ord <- acmePerformGetObject url
       case acmeObjOrderStatus ord of
-        "pending" -> retry poll
+        "pending" -> do
+          cragLog "acmePerformWaitUntilOrderReady (pending)"
+          retry poll
         "ready" -> return ord
         s -> error $ "state not good: " ++ s
 
@@ -141,7 +146,9 @@ acmePerformWaitUntilOrderValid url = poll
     poll = do
       ord <- acmePerformGetObject url
       case acmeObjOrderStatus ord of
-        "processing" -> retry poll
+        "processing" -> do
+          cragLog "acmePerformWaitUntilOrderValid (processing)"
+          retry poll
         "valid" -> return ord
         s -> error $ "state not good: " ++ s
 
@@ -166,16 +173,19 @@ instance CertificateForm String where
 
 retrieveCertificate :: CertificateForm a => AcmeObjOrder -> CragT [a]
 retrieveCertificate o = do
+  cragLog "retrieveCertificate"
   crts <-
     parsePEMBody <$>
-    httpsGet (fromMaybe (error "no cert url") (acmeObjOrderCertificate o))
+    httpsJwsPostAsGetUrl
+      (fromMaybe (error "no cert url") (acmeObjOrderCertificate o))
   return (map fromBytestring crts)
 
 -- ** Authorization
 -- | Get all authorizations of an order
 acmePerformGetAuthorizations :: AcmeObjOrder -> CragT [AcmeObjAuthorization]
-acmePerformGetAuthorizations =
-  mapM acmePerformGetObject . acmeObjOrderAuthorizations
+acmePerformGetAuthorizations o = do
+  cragLog "acmePerformGetAuthorizations"
+  mapM acmePerformGetObject $ acmeObjOrderAuthorizations o
 
 data ChallengeReaction =
   ChallengeReaction
@@ -186,6 +196,7 @@ data ChallengeReaction =
 acmePerformChallengeReaction ::
      [(String, ChallengeReaction)] -> [AcmeObjAuthorization] -> CragT ()
 acmePerformChallengeReaction reactions authzs = do
+  cragLog "acmePerformChallengeReaction"
   ops <- mapM findReaction authzs'
   sequence_
     [ do keyAuthz <- acmeKeyAuthorization challenge
@@ -211,8 +222,9 @@ acmePerformChallengeReaction reactions authzs = do
           throwError $ AcmeErrNoFullfillableChallenge (map fst reactions) authz
 
 acmePerformFinalizeOrder :: AcmeObjOrder -> Base64Octets -> CragT AcmeObjOrder
-acmePerformFinalizeOrder order =
-  acmePerformFinalizeOrder' (acmeObjOrderFinalize order)
+acmePerformFinalizeOrder order x = do
+  cragLog "acmePerformFinalizeOrder"
+  acmePerformFinalizeOrder' (acmeObjOrderFinalize order) x
 
 acmePerformFinalizeOrder' :: URL -> Base64Octets -> CragT AcmeObjOrder
 acmePerformFinalizeOrder' url csr =
@@ -224,6 +236,7 @@ acmeChallengeRespond ::
   -> (AcmeKeyAuthorization -> IO ())
   -> CragT AcmeObjChallenge
 acmeChallengeRespond challenge cleanup = do
+  cragLog "acmeChallengeRespond"
   k <- acmeKeyAuthorization challenge
   res <- resBody <$> httpsJwsPostUrl (acmeObjChallengeUrl challenge) emptyObject
   catchError res (handler k)
@@ -251,7 +264,7 @@ acmeNewObjAccountStub mail = do
 
 -- | Get ACME Object
 acmePerformGetObject :: FromJSON a => URL -> CragT a
-acmePerformGetObject url = resBody =<< httpsGet url
+acmePerformGetObject url = resBody =<< httpsJwsPostAsGetUrl url
 
 acmeNewJWK :: IO JWK
 acmeNewJWK = genJWK (RSAGenParam 256)

@@ -15,6 +15,7 @@ import Crypto.JOSE.Types (Base64Octets(..))
 import Data.Aeson
 import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Lazy (toStrict)
+import Data.Maybe (fromMaybe)
 import Data.Text as T
 
 import Network.ACME.Error
@@ -86,7 +87,7 @@ ACME server for obtaining a valid nonce for this request.
 -}
 acmeNewJwsBody ::
      (ToJSON a)
-  => a
+  => Maybe a
   -> URL
   -> JWK
   -> JWK
@@ -98,7 +99,7 @@ acmeNewJwsBody vObj vUrl vJwkPrivate vJwkPublic vNonce vKid = do
   withExceptT AcmeErrJws $ signJWS payload (Identity (xh, vJwkPrivate))
   where
     vHeader = newAcmeJwsHeader vUrl vJwkPrivate vJwkPublic vNonce vKid
-    payload = toStrict $ encode vObj
+    payload = toStrict $ maybe "" encode vObj
 
 -- | JSON Web Key (JWK) Thumbprint
 -- <https://tools.ietf.org/html/rfc7638 RFC 7638>

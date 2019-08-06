@@ -7,6 +7,7 @@ module Network.ACME.HTTPS
   , resHeaderAsURL
   , acmePerformFindAccountURL
   , parsePEMBody
+  , httpsJwsPostAsGetUrl
   ) where
 
 import Network.ACME.HTTPS.Internal
