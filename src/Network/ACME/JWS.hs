@@ -15,7 +15,6 @@ import Crypto.JOSE.Types (Base64Octets(..))
 import Data.Aeson
 import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Lazy (toStrict)
-import Data.Maybe (fromMaybe)
 import Data.Text as T
 
 import Network.ACME.Error

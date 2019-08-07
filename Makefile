@@ -1,3 +1,5 @@
+SHELL = /bin/bash
+
 export GOPATH := $(shell pwd)/gopath
 
 PEBBLE_PATH = $(GOPATH)/src/github.com/letsencrypt/pebble
@@ -29,6 +31,6 @@ pebble-install:
 format-code: $(HS)
 
 $(HS):
-	@hindent $@
-	@hlint $@
+	-@hindent --sort-imports $@
+	-@hlint -j --no-summary $@
 

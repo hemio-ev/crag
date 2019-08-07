@@ -20,8 +20,7 @@ import Data.Time
   , parseTimeM
   )
 import Network.HTTP.Client
-  ( HttpException(HttpExceptionRequest)
-  , Manager
+  ( Manager
   , Request
   , RequestBody(RequestBodyLBS)
   , Response
