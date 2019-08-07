@@ -107,10 +107,7 @@ test-suite crag-integration
     tasty-hunit,
     -- webserver
     warp,
-    wai,
-    -- code formatting/quality
-    hindent == 5.3.*,
-    hlint > 2
+    wai
   ghc-options:
     -Wall
     -Wcompat

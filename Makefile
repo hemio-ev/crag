@@ -29,6 +29,6 @@ pebble-install:
 format-code: $(HS)
 
 $(HS):
-	@./.cabal-sandbox/bin/hindent $@
-	@./.cabal-sandbox/bin/hlint $@
+	@hindent $@
+	@hlint $@
 
