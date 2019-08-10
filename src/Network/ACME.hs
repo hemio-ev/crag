@@ -128,6 +128,7 @@ acmePerformNewOrder ord = do
   newOrd <- resBody res
   return (loc, newOrd)
 
+-- | Wait after responses to challenges have been send (`acmeChallengeRespond`)
 acmePerformWaitUntilOrderReady :: URL -> CragT AcmeObjOrder
 acmePerformWaitUntilOrderReady url = poll
   where
@@ -138,8 +139,12 @@ acmePerformWaitUntilOrderReady url = poll
           cragLog "acmePerformWaitUntilOrderReady (pending)"
           retry poll
         "ready" -> return ord
-        s -> error $ "state not good: " ++ s
+        _ -> do
+          authz <- acmePerformGetAuthorizations ord
+          throwError $ AcmeErrUnexpectedOrderStatus ord (Just authz)
 
+-- | Wait for certificate issuance after finalization
+-- | (`acmePerformFinalizeOrder`)
 acmePerformWaitUntilOrderValid :: URL -> CragT AcmeObjOrder
 acmePerformWaitUntilOrderValid url = poll
   where
@@ -150,7 +155,7 @@ acmePerformWaitUntilOrderValid url = poll
           cragLog "acmePerformWaitUntilOrderValid (processing)"
           retry poll
         "valid" -> return ord
-        s -> error $ "state not good: " ++ s
+        _ -> throwError $ AcmeErrUnexpectedOrderStatus ord Nothing
 
 class CertificateForm a where
   fromBytestring :: B.ByteString -> a

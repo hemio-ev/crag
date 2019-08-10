@@ -37,6 +37,8 @@ data AcmeErr
       }
   -- | Challenge did not contain a "token" field
   | AcmeErrNoToken AcmeObjChallenge
+  -- |
+  | AcmeErrUnexpectedOrderStatus AcmeObjOrder (Maybe [AcmeObjAuthorization])
   -- | Request not supported by the server (not in 'AcmeObjDirectory')
   | AcmeErrRequestNotSupported AcmeDirectoryRequest
   --
