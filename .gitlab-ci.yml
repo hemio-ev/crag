@@ -1,10 +1,6 @@
 build_job:
     script:
-        - cabal update
-        - cabal sandbox init
-        - cabal install --dependencies-only --enable-tests --disable-optimization
+        - stack build
         - make pebble
-        - cabal configure --enable-tests --enable-coverage --disable-optimization
-        - cabal test
-        - tail -n 2 dist/hpc/vanilla/html/crag-integration/hpc_index.html
+        - stack build --test --coverage
 
