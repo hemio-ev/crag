@@ -1,3 +1,6 @@
+{-|
+Everything you need.
+-}
 module Network.ACME
   ( module Network.ACME
   , acmePerformFindAccountURL
@@ -144,7 +147,7 @@ acmePerformWaitUntilOrderReady url = poll
           throwError $ AcmeErrUnexpectedOrderStatus ord (Just authz)
 
 -- | Wait for certificate issuance after finalization
--- | (`acmePerformFinalizeOrder`)
+--   (`acmePerformFinalizeOrder`)
 acmePerformWaitUntilOrderValid :: URL -> CragT AcmeObjOrder
 acmePerformWaitUntilOrderValid url = poll
   where

@@ -130,7 +130,9 @@ removeResponse k httpServerLiveConf =
   modifyIORef httpServerLiveConf (filter ((/= k) . fst))
 
 myHttpServer :: HTTPServerLiveConf -> IO ()
-myHttpServer v = runSettings (setHost "::1" $ setPort 5002 defaultSettings) app
+myHttpServer v = do
+  runSettings (setHost "::1" $ setPort 5002 defaultSettings) app
+  runSettings (setHost "127.0.0.1" $ setPort 5002 defaultSettings) app
   where
     app req respond = do
       resp <- readIORef v
