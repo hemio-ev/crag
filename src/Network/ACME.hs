@@ -262,7 +262,7 @@ acmePerformRevokeCertificate obj =
 -- ** Object generation
 acmeNewObjAccountStub :: String -> IO (AcmeObjStubAccount, JWK)
 acmeNewObjAccountStub mail = do
-  keyMat <- genJWK (RSAGenParam 256)
+  keyMat <- acmeNewJWK
   return
     ( def
         { acmeObjStubAccountContact = Just ["mailto:" ++ mail]

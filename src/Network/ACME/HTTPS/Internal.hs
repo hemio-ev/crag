@@ -44,13 +44,10 @@ import Network.HTTP.Types
 import Text.Read (readMaybe)
 
 import Network.ACME.Error
+import Network.ACME.Internal
 import Network.ACME.JWS
 import Network.ACME.Object
 import Network.ACME.Type
-
--- * To Be Removed
-maxRetries :: Int
-maxRetries = 20
 
 -- * Operations
 -- | Get new nonce
@@ -183,11 +180,13 @@ httpsJwsPost' retried withKid url bod = do
   return res
   where
     handler :: AcmeErr -> CragT ResponseLbs
-    handler e@AcmeErrDetail {}
-      | errBadNonce e || retried >= maxRetries = do
-        cragStateSetNonce Nothing
-        httpsJwsPost' (retried + 1) withKid url bod
-      | otherwise = throwError e
+    handler e@AcmeErrDetail {} = do
+      maxRetries <- asks (cragConfigBadNonceRetries . cragConfig)
+      if errBadNonce e || retried >= maxRetries
+        then do
+          cragStateSetNonce Nothing
+          httpsJwsPost' (retried + 1) withKid url bod
+        else throwError e
     handler e = throwError e
     accURL :: CragT (Maybe URL)
     accURL
@@ -211,7 +210,7 @@ https' ::
   -> Manager
   -> CragLogger
   -> ExceptT AcmeErr IO ResponseLbs
-https' request cfg manager logger = perform 20
+https' request config manager logger = perform (cragConfigHttpsRetries config)
   where
     perform :: Int -> ExceptT AcmeErr IO ResponseLbs
     perform i = do
@@ -221,7 +220,9 @@ https' request cfg manager logger = perform 20
           | i < 0 -> throwError $ AcmeErrHTTPS e
           | otherwise -> do
             liftIO $ cragLog' logger $ show e
-            liftIO $ threadDelay 100000
+            liftIO $
+              threadDelay
+                (secondsToMicroseconds (cragConfigHttpsRetryInterval config))
             perform (i - 1)
         Right r -> return r
 

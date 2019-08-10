@@ -11,7 +11,6 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Either (isRight)
 import Data.IORef
-import Data.List (isInfixOf)
 import Data.Maybe (fromJust, fromMaybe)
 import Data.PEM (pemWriteBS)
 import Data.X509 (AltName(AltNameDNS), ExtSubjectAltName(ExtSubjectAltName))
@@ -25,7 +24,6 @@ import Data.X509.PKCS10
   , toDER
   , toPEM
   )
-import GHC.IO.Handle (hDuplicateTo, hGetLine)
 import Network.Connection (TLSSettings(TLSSettingsSimple))
 import Network.HTTP.Client
   ( Manager
@@ -44,6 +42,7 @@ import Test.Tasty.HUnit
 
 import Crypto.JOSE.Types (Base64Octets(..))
 import Network.ACME
+import Network.ACME.JWS
 import Network.ACME.Object
 import Network.ACME.Type
 
@@ -53,19 +52,19 @@ integrationTests =
 
 testNewAccount :: TestTree
 testNewAccount =
-  testCaseSteps "Account operations" $ \step -> do
+  testCase "Account operations" $ do
     (acc, jwk) <- acmeNewObjAccountStub "email1@example.org"
     state <- myState jwk putStrLn
     _ <-
       flip evalCragT state $ do
-        (url1, accObj) <- acmePerformCreateAccount acc
+        (url1, _) <- acmePerformCreateAccount acc
         url2 <- acmePerformFindAccountURL
         return (url1 @?= url2)
     return ()
 
 testOrderNew :: TestTree
 testOrderNew =
-  testCaseSteps "testOrderNew" $ \step -> do
+  testCase "testOrderNew" $ do
     (accStub, jwk) <- acmeNewObjAccountStub "email@example.org"
     httpServerLiveConf <- newIORef []
     myHttpServer httpServerLiveConf
@@ -83,6 +82,7 @@ testOrderNew =
     print res
     isRight res @?= True
 
+myState :: JWK -> (String -> IO ()) -> IO (CragReader, CragState)
 myState jwk step = do
   manager <- newUnsafeTestManager
   let logger x = step ("[cragLog] " <> x)
@@ -177,10 +177,7 @@ confUrl :: URL
 confUrl =
   fromMaybe (error "invalid conf url") $ parseURL "https://localhost:14000/dir"
 
+config :: JWK -> CragConfig
 config jwk =
-  CragConfig
-    { cragConfigDirectoryURL = confUrl
-    , cragConfigJwk = jwk
-    , cragConfigPollingInterval = 2
-    , cragConfigRateLimitRetryAfter = 2
-    }
+  (newCragConfig confUrl jwk)
+    {cragConfigPollingInterval = 2, cragConfigRateLimitRetryAfter = 2}

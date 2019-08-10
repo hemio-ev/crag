@@ -5,6 +5,7 @@ import Data.Aeson
 import Data.Aeson.TH (deriveJSON)
 import Data.Char
 import Data.List
+import Data.Maybe (fromMaybe)
 import Language.Haskell.TH.Syntax (Dec, Name, Q, nameBase)
 import Network.URI (URI, uriScheme)
 
@@ -17,11 +18,10 @@ acmeJSONoptions pre =
     {fieldLabelModifier = startLower . withoutPrefix, omitNothingFields = True}
   where
     withoutPrefix str =
-      case stripPrefix pre str of
-        Just x -> x
-        Nothing ->
-          error $
-          "deriveAcmeJSON: ‘" ++ pre ++ "’ is not a prefix of ‘" ++ str ++ "’"
+      fromMaybe
+        (error $
+         "deriveAcmeJSON: ‘" ++ pre ++ "’ is not a prefix of ‘" ++ str ++ "’") $
+      stripPrefix pre str
 
 startLower :: String -> String
 startLower [] = ""

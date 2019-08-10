@@ -35,6 +35,24 @@ data CragConfig =
   -- ^ Default retry interval in seconds when hitting rate limits.
   --
   -- If available, the servers @Retry-After@ header is used instead.
+    , cragConfigHttpsRetries :: Int
+    -- ^ Number of retries before giving up to establish an HTTPS connection
+    , cragConfigHttpsRetryInterval :: Int
+    -- ^ Retry interval for HTTPS connections in seconds
+    , cragConfigBadNonceRetries :: Int
+    -- ^ Number of retries after consecutive bad nonce replies
+    }
+
+newCragConfig :: URL -> JWK -> CragConfig
+newCragConfig url jwk =
+  CragConfig
+    { cragConfigDirectoryURL = url
+    , cragConfigJwk = jwk
+    , cragConfigPollingInterval = 30
+    , cragConfigRateLimitRetryAfter = 300
+    , cragConfigHttpsRetries = 12
+    , cragConfigHttpsRetryInterval = 5
+    , cragConfigBadNonceRetries = 20
     }
 
 -- ** State and Reader
