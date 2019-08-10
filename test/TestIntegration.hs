@@ -68,7 +68,7 @@ testOrderNew =
   testCaseSteps "testOrderNew" $ \step -> do
     (accStub, jwk) <- acmeNewObjAccountStub "email@example.org"
     httpServerLiveConf <- newIORef []
-    _ <- forkIO $ myHttpServer httpServerLiveConf
+    myHttpServer httpServerLiveConf
     state <- myState jwk putStrLn
     res <-
       flip evalCragT state $ do
@@ -131,9 +131,11 @@ removeResponse k httpServerLiveConf =
 
 myHttpServer :: HTTPServerLiveConf -> IO ()
 myHttpServer v = do
-  runSettings (setHost "::1" $ setPort 5002 defaultSettings) app
-  runSettings (setHost "127.0.0.1" $ setPort 5002 defaultSettings) app
+  void $ forkIO $ runServer "127.0.0.1"
+  void $ forkIO $ runServer "::1"
   where
+    runServer host =
+      runSettings (setHost host $ setPort 5002 defaultSettings) app
     app req respond = do
       resp <- readIORef v
       let host =
