@@ -1,6 +1,12 @@
-build_job:
+stack-setup:
     script:
+        - stack setup
+build:
+    script:
+        - stack update
         - stack build
+
+test:
+    script:
         - make pebble
         - stack build --test --coverage
-
