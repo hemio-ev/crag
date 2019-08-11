@@ -1,12 +1,13 @@
 stack-setup:
     script:
         - stack setup
+
 build:
     script:
         - stack update
-        - stack build
+        - stack build --fast
 
 test:
     script:
         - make pebble
-        - stack build --test --coverage
+        - stack test --fast --coverage
