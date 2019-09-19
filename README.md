@@ -7,26 +7,17 @@ Native Haskell client library and CLI for ACME (Automatic Certificate Management
 
 ## Integration Tests
 
-The integration tests are performed against [letsencrypt/pebble](https://github.com/letsencrypt/pebble). You can setup pebble by running
+The integration tests are performed against [letsencrypt/pebble](https://github.com/letsencrypt/pebble). These tests can be run by executing
 
-    make pebble
+```sh
+sudo curl -sSL https://get.haskellstack.org/ | sh
+make pebble
+stack test
+```
 
-The tests can be beformed via
-
-    curl -sSL https://get.haskellstack.org/ | sh
-    make pebble
-    stack test
-
-All required servers are started automatically by the tests.
+All required servers are started and stopped automatically.
 
 ## About ACME
-
-The ACME draft is currently in version 9 and in "WG Last Call". The ACME server
-implementation *boulder* currently substentially deviates from the current ACME
-draft and is NOT supported by this library.
-
-This library has workarounds for compatibility with *boulder*. They will be
-dropped, once *boulder* follows the upcomming RFC.
 
 - [RFC 8555: Automatic Certificate Management Environment (ACME)](https://tools.ietf.org/html/rfc8555)
 - [Pebble (Let's Encrypt's ACME test server)](https://github.com/letsencrypt/pebble)
