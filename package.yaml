@@ -1,0 +1,81 @@
+name:                crag
+version:             0.0.1.0
+synopsis:            Native Haskell ACME Library and CLI
+homepage:            https://git.hemio.de/hemio/crag
+license:             LGPL-3
+license-file:        LICENSE
+author:              Sophie Herold
+maintainer:          sophie@hemio.de
+category:            Web
+build-type:          Simple
+extra-source-files:  ChangeLog.md
+
+_default_dependencies:
+ - &default_dependencies
+    aeson: 1.4.*
+    base: 4.12.*
+    bytestring: 0.10.*
+    case-insensitive: 1.2.*
+    data-default-class: 0.1.*
+    http-client-tls: 0.3.*
+    http-client: 0.6.*
+    http-types: 0.12.*
+    jose: 0.8.*
+    lens: 4.17.*
+    mtl: 2.2.*
+    network-uri: 2.6.*
+    network: 2.8.*
+    pem: 0.2.*
+    template-haskell: 2.14.*
+    text: 1.2.*
+    time: 1.8.*
+    x509: 1.7.*
+
+_defaults: &defaults
+  default-extensions:
+    - FlexibleInstances
+    - OverloadedStrings
+    - TemplateHaskell
+  dependencies:
+    <<: *default_dependencies
+  ghc-options:
+    - -Wall
+    - -Wcompat
+    - -Wincomplete-record-updates
+
+library:
+  <<: *defaults
+  source-dirs: src
+
+tests:
+  crag-unit:
+    <<: *defaults
+    main: test/crag-unit.hs
+    dependencies:
+      <<: *default_dependencies
+      crag: 0.*
+      file-embed: 0.0.*
+      tasty: 1.2.*
+      tasty-hunit: 0.10.*
+
+  crag-integration:
+    <<: *defaults
+    main:    test/crag-integration.hs
+    source-dirs:
+     - .
+     - test
+    other-modules: TestIntegration
+    dependencies:
+      <<: *default_dependencies
+      crag: 0.*
+      connection: 0.3.*
+      cryptonite: 0.25.*
+      pkcs10: 0.2.*
+      process: 1.6.*
+      # tests
+      tasty: 1.2.*
+      tasty-hunit: 0.10.*
+      # webserver
+      warp: 3.2.*
+      wai: 3.2.*
+

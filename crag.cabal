@@ -1,23 +1,26 @@
-name:                crag
-version:             0.0.0.2
-synopsis:            ACME Library
--- description:         
-homepage:            https://git.hemio.de/hemio/crag
-license:             LGPL-3
-license-file:        LICENSE
-author:              Sophie Herold
-maintainer:          sophie@hemio.de
--- copyright:           
-category:            Web
-build-type:          Simple
-extra-source-files:  ChangeLog.md
-cabal-version:       >=1.20
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.2.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 5b5cd7a046062654edcf43e65780e831977d31785a7c2ee12b6157d973c8c6f3
+
+name:           crag
+version:        0.0.1.0
+synopsis:       Native Haskell ACME Library and CLI
+homepage:       https://git.hemio.de/hemio/crag
+license:        LGPL-3
+license-file:   LICENSE
+author:         Sophie Herold
+maintainer:     sophie@hemio.de
+category:       Web
+build-type:     Simple
+extra-source-files:
+  ChangeLog.md
 
 library
-  default-extensions:
-    FlexibleInstances,
-    OverloadedStrings,
-    TemplateHaskell
+  default-extensions: FlexibleInstances OverloadedStrings TemplateHaskell
   exposed-modules:
     Network.ACME
     Network.ACME.Error
@@ -27,89 +30,100 @@ library
     Network.ACME.JWS
     Network.ACME.Object
     Network.ACME.Type
+  other-modules:
+    Paths_crag
   build-depends:
-    base,
-    aeson,
-    bytestring,
-    case-insensitive,
-    data-default-class,
-    http-client,
-    http-client-tls >= 0.3.5,
-    http-types,
-    jose >= 0.6,
-    lens,
-    mtl,
-    network,
-    network-uri,
-    pem,
-    template-haskell,
-    text,
-    time,
-    x509
-  hs-source-dirs:      src
-  default-language:    Haskell2010
-  ghc-options:
-    -Wall
-    -Wcompat
-    -Wincomplete-record-updates
-
-test-suite crag-unit
-  default-extensions:
-    OverloadedStrings
-  default-language:    Haskell2010
-  type:       exitcode-stdio-1.0
-  main-is:    test/crag-unit.hs
-  hs-source-dirs: .    test
-  build-depends:
-    crag,
-    base,
-    aeson,
-    bytestring,
-    transformers,
-    -- test
-    file-embed,
-    tasty,
-    tasty-hunit
-  ghc-options:
-    -Wall
-    -Wcompat
-    -Wincomplete-record-updates
+    aeson ==1.4.*,
+    base ==4.12.*,
+    bytestring ==0.10.*,
+    case-insensitive ==1.2.*,
+    data-default-class ==0.1.*,
+    http-client ==0.6.*,
+    http-client-tls ==0.3.*,
+    http-types ==0.12.*,
+    jose ==0.8.*,
+    lens ==4.17.*,
+    mtl ==2.2.*,
+    network ==2.8.*,
+    network-uri ==2.6.*,
+    pem ==0.2.*,
+    template-haskell ==2.14.*,
+    text ==1.2.*,
+    time ==1.8.*,
+    x509 ==1.7.*
+  hs-source-dirs:
+    src
+  default-language: Haskell2010
+  ghc-options: -Wall -Wcompat -Wincomplete-record-updates
 
 test-suite crag-integration
-  default-extensions:
-    OverloadedStrings
-  default-language:    Haskell2010
-  type:       exitcode-stdio-1.0
-  main-is:    test/crag-integration.hs
-  hs-source-dirs: . test
-  other-modules: TestIntegration
+  default-extensions: FlexibleInstances OverloadedStrings TemplateHaskell
+  default-language: Haskell2010
+  type: exitcode-stdio-1.0
+  main-is: test/crag-integration.hs
+  hs-source-dirs:
+    ./.
+    test
+  other-modules:
+    TestIntegration
   build-depends:
-    crag,
-    base,
-    aeson,
-    bytestring,
-    connection,
-    cryptonite,
-    http-client,
-    http-client-tls >= 0.3.5,
-    http-types,
-    mtl,
-    pem,
-    pem,
-    pkcs10,
-    process,
-    x509,
-    yaml,
-    -- temp, should be removed
-    jose,
-    -- test
-    tasty,
-    tasty-hunit,
-    -- webserver
-    warp,
-    wai
-  ghc-options:
-    -Wall
-    -Wcompat
-    -Wincomplete-record-updates
+    aeson ==1.4.*,
+    base ==4.12.*,
+    bytestring ==0.10.*,
+    case-insensitive ==1.2.*,
+    connection ==0.3.*,
+    crag ==0.*,
+    cryptonite ==0.25.*,
+    data-default-class ==0.1.*,
+    http-client ==0.6.*,
+    http-client-tls ==0.3.*,
+    http-types ==0.12.*,
+    jose ==0.8.*,
+    lens ==4.17.*,
+    mtl ==2.2.*,
+    network ==2.8.*,
+    network-uri ==2.6.*,
+    pem ==0.2.*,
+    pkcs10 ==0.2.*,
+    process ==1.6.*,
+    tasty ==1.2.*,
+    tasty-hunit ==0.10.*,
+    template-haskell ==2.14.*,
+    text ==1.2.*,
+    time ==1.8.*,
+    wai ==3.2.*,
+    warp ==3.2.*,
+    x509 ==1.7.*
+  ghc-options: -Wall -Wcompat -Wincomplete-record-updates
 
+test-suite crag-unit
+  default-extensions: FlexibleInstances OverloadedStrings TemplateHaskell
+  default-language: Haskell2010
+  type: exitcode-stdio-1.0
+  main-is: test/crag-unit.hs
+  other-modules:
+    Paths_crag
+  build-depends:
+    aeson ==1.4.*,
+    base ==4.12.*,
+    bytestring ==0.10.*,
+    case-insensitive ==1.2.*,
+    crag ==0.*,
+    data-default-class ==0.1.*,
+    file-embed ==0.0.*,
+    http-client ==0.6.*,
+    http-client-tls ==0.3.*,
+    http-types ==0.12.*,
+    jose ==0.8.*,
+    lens ==4.17.*,
+    mtl ==2.2.*,
+    network ==2.8.*,
+    network-uri ==2.6.*,
+    pem ==0.2.*,
+    tasty ==1.2.*,
+    tasty-hunit ==0.10.*,
+    template-haskell ==2.14.*,
+    text ==1.2.*,
+    time ==1.8.*,
+    x509 ==1.7.*
+  ghc-options: -Wall -Wcompat -Wincomplete-record-updates
