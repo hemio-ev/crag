@@ -1,14 +1,16 @@
-name:                crag
-version:             0.0.1.0
-synopsis:            Native Haskell ACME Library and CLI
-homepage:            https://git.hemio.de/hemio/crag
-license:             LGPL-3
-license-file:        LICENSE
-author:              Sophie Herold
-maintainer:          sophie@hemio.de
-category:            Web
-build-type:          Simple
-extra-source-files:  ChangeLog.md
+name: crag
+version: 0.0.1.0
+synopsis: ACME Library and CLI
+description: >-
+ Native Haskell client library and CLI for ACME (Automatic Certificate \
+ Management Environment, RFC 8555)
+
+homepage: https://git.hemio.de/hemio/crag
+author: Sophie Herold <sophie@hemio.de>
+category: Network
+extra-doc-files:
+ - README.md
+ - ChangeLog.md
 
 _default_dependencies:
  - &default_dependencies

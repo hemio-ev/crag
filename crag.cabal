@@ -1,22 +1,24 @@
-cabal-version: 1.12
+cabal-version: 1.18
 
 -- This file has been generated from package.yaml by hpack version 0.31.2.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5b5cd7a046062654edcf43e65780e831977d31785a7c2ee12b6157d973c8c6f3
+-- hash: ecd837db5d9386d3350905eb201d2d5851ebefec30f6bfb37131ddf5e520e63a
 
 name:           crag
 version:        0.0.1.0
-synopsis:       Native Haskell ACME Library and CLI
+synopsis:       ACME Library and CLI
+description:    Native Haskell client library and CLI for ACME (Automatic Certificate \ Management Environment, RFC 8555)
 homepage:       https://git.hemio.de/hemio/crag
 license:        LGPL-3
 license-file:   LICENSE
-author:         Sophie Herold
-maintainer:     sophie@hemio.de
-category:       Web
+author:         Sophie Herold <sophie@hemio.de>
+maintainer:     Sophie Herold <sophie@hemio.de>
+category:       Network
 build-type:     Simple
-extra-source-files:
+extra-doc-files:
+  README.md
   ChangeLog.md
 
 library
